@@ -19,6 +19,7 @@ import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.offlinepw.vault.adapter.VaultAdapter;
 import com.offlinepw.vault.crypto.CryptoManager;
 import com.offlinepw.vault.db.VaultDatabaseHelper;
@@ -40,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
     private FloatingActionButton fabAdd;
 
     private boolean isDarkMode = true;
-    private boolean isPersian = true;
+    private boolean isPersian = false;
     private SharedPreferences prefs;
 
     @Override
@@ -50,7 +51,7 @@ public class MainActivity extends AppCompatActivity {
 
         prefs = getSharedPreferences("OfflinePW_Prefs", MODE_PRIVATE);
         isDarkMode = prefs.getBoolean("is_dark_mode", true);
-        isPersian = prefs.getBoolean("is_persian", true);
+        isPersian = prefs.getBoolean("is_persian", false);
 
         dbHelper = new VaultDatabaseHelper(this);
         cryptoManager = new CryptoManager(this);
@@ -112,23 +113,25 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateThemeUI() {
         if (isDarkMode) {
-            btnThemeToggle.setText("🌙");
+            btnThemeToggle.setText("DARK");
             mainRootLayout.setBackgroundColor(Color.parseColor("#09090B"));
             appBarLayout.setBackgroundColor(Color.parseColor("#09090B"));
             tvAppTitle.setTextColor(Color.parseColor("#F4F4F5"));
             etSearch.setTextColor(Color.parseColor("#F4F4F5"));
             etSearch.setHintTextColor(Color.parseColor("#71717A"));
+            
             btnLanguage.setBackgroundColor(Color.parseColor("#18181B"));
             btnLanguage.setTextColor(Color.parseColor("#F4F4F5"));
             btnThemeToggle.setBackgroundColor(Color.parseColor("#18181B"));
             btnThemeToggle.setTextColor(Color.parseColor("#F4F4F5"));
         } else {
-            btnThemeToggle.setText("☀️");
-            mainRootLayout.setBackgroundColor(Color.parseColor("#F4F4F5"));
-            appBarLayout.setBackgroundColor(Color.parseColor("#F4F4F5"));
+            btnThemeToggle.setText("LIGHT");
+            mainRootLayout.setBackgroundColor(Color.parseColor("#FAFAFA"));
+            appBarLayout.setBackgroundColor(Color.parseColor("#FAFAFA"));
             tvAppTitle.setTextColor(Color.parseColor("#09090B"));
             etSearch.setTextColor(Color.parseColor("#09090B"));
             etSearch.setHintTextColor(Color.parseColor("#A1A1AA"));
+            
             btnLanguage.setBackgroundColor(Color.parseColor("#E4E4E7"));
             btnLanguage.setTextColor(Color.parseColor("#09090B"));
             btnThemeToggle.setBackgroundColor(Color.parseColor("#E4E4E7"));
@@ -139,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
     private void loadVaultData() {
         List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
         if (items.isEmpty()) {
-            VaultItem sample = new VaultItem(UUID.randomUUID().toString(), "Google Account", "LOGIN", "user@gmail.com", "kX9#mP2$vL8@qW4!", "حساب اصلی گوگل");
+            VaultItem sample = new VaultItem(UUID.randomUUID().toString(), "Google Account", "LOGIN", "user@gmail.com", "kX9#mP2$vL8@qW4!", "Main Google Account");
             dbHelper.insertItem(sample, cryptoManager);
             items = dbHelper.getAllDecryptedItems(cryptoManager);
         }
@@ -153,24 +156,51 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog dialog = builder.create();
 
         TextView tvDialogTitle = dialogView.findViewById(R.id.tvDialogTitle);
+        TextInputLayout tilTitle = dialogView.findViewById(R.id.tilTitle);
+        TextInputLayout tilCategory = dialogView.findViewById(R.id.tilCategory);
+        TextInputLayout tilUsername = dialogView.findViewById(R.id.tilUsername);
+        TextInputLayout tilPassword = dialogView.findViewById(R.id.tilPassword);
+        TextInputLayout tilNotes = dialogView.findViewById(R.id.tilNotes);
+
         TextInputEditText etTitle = dialogView.findViewById(R.id.etTitle);
         TextInputEditText etCategory = dialogView.findViewById(R.id.etCategory);
         TextInputEditText etUsername = dialogView.findViewById(R.id.etUsername);
         TextInputEditText etPassword = dialogView.findViewById(R.id.etPassword);
         TextInputEditText etNotes = dialogView.findViewById(R.id.etNotes);
-        View btnGenerate = dialogView.findViewById(R.id.btnGenerate);
-        View btnCancel = dialogView.findViewById(R.id.btnCancel);
-        View btnSave = dialogView.findViewById(R.id.btnSave);
+
+        MaterialButton btnGenerate = dialogView.findViewById(R.id.btnGenerate);
+        MaterialButton btnCancel = dialogView.findViewById(R.id.btnCancel);
+        MaterialButton btnSave = dialogView.findViewById(R.id.btnSave);
+
+        // اعمال زبان به تمام فیلدها و هینت‌ها
+        if (isPersian) {
+            tvDialogTitle.setText(existingItem != null ? "ویرایش رکورد" : "ثبت رکورد جدید");
+            tilTitle.setHint("عنوان (مثلاً Google یا کارت بانک)");
+            tilCategory.setHint("دسته‌بندی (LOGIN, CARD, NOTE, WIFI)");
+            tilUsername.setHint("نام کاربری یا ایمیل یا شماره کارت");
+            tilPassword.setHint("رمز عبور");
+            tilNotes.setHint("یادداشت امن (اختیاری)");
+            btnGenerate.setText("ساخت رمز");
+            btnCancel.setText("انصراف");
+            btnSave.setText("ذخیره امن");
+        } else {
+            tvDialogTitle.setText(existingItem != null ? "Edit Vault Item" : "New Vault Item");
+            tilTitle.setHint("Title (e.g. Google, Bank Card)");
+            tilCategory.setHint("Category (LOGIN, CARD, NOTE, WIFI)");
+            tilUsername.setHint("Username / Email / Card Number");
+            tilPassword.setHint("Password");
+            tilNotes.setHint("Secure Notes (Optional)");
+            btnGenerate.setText("Generate");
+            btnCancel.setText("Cancel");
+            btnSave.setText("Save Securely");
+        }
 
         if (existingItem != null) {
-            tvDialogTitle.setText(isPersian ? "ویرایش رکورد" : "Edit Item");
             etTitle.setText(existingItem.getTitle());
             etCategory.setText(existingItem.getCategory());
             etUsername.setText(existingItem.getUsername());
             etPassword.setText(existingItem.getPassword());
             etNotes.setText(existingItem.getNotes());
-        } else {
-            tvDialogTitle.setText(isPersian ? "ثبت رکورد جدید" : "New Vault Item");
         }
 
         btnGenerate.setOnClickListener(v -> {
