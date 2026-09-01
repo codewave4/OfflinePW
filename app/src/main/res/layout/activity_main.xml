@@ -2,29 +2,84 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mainRootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#09090B">
 
     <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="#09090B"
         app:elevation="0dp">
 
+        <!-- Toolbar با عنوان OFFLINEPW و دو دکمه در سمت راست -->
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize">
+            android:layout_height="?attr/actionBarSize"
+            android:paddingHorizontal="8dp">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="OFFLINEPW // NORDIC"
-                android:textColor="#F4F4F5"
-                android:textStyle="bold"
-                android:fontFamily="monospace"
-                android:textSize="15sp" />
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <!-- عنوان ساده و شیک OFFLINEPW -->
+                <TextView
+                    android:id="@+id/tvAppTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="OFFLINEPW"
+                    android:textColor="#F4F4F5"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.05"
+                    android:fontFamily="monospace"
+                    android:textSize="16sp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent" />
+
+                <!-- دکمه تغییر زبان (FA / EN) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLanguage"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="48dp"
+                    android:layout_height="36dp"
+                    android:padding="0dp"
+                    android:text="EN"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:textColor="#F4F4F5"
+                    app:backgroundTint="#18181B"
+                    app:strokeColor="#27272A"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="8dp"
+                    android:layout_marginEnd="8dp"
+                    app:layout_constraintEnd_toStartOf="@id/btnThemeToggle"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent" />
+
+                <!-- دکمه دارک مود و لایت مود (🌙 / ☀️) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnThemeToggle"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="40dp"
+                    android:layout_height="36dp"
+                    android:padding="0dp"
+                    android:text="🌙"
+                    android:textSize="14sp"
+                    android:textColor="#F4F4F5"
+                    app:backgroundTint="#18181B"
+                    app:strokeColor="#27272A"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="8dp"
+                    android:layout_marginEnd="8dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.appcompat.widget.Toolbar>
 
         <EditText
@@ -46,7 +101,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingTop="8dp"
+        android:paddingTop="6dp"
         android:paddingBottom="90dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
