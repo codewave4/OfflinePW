@@ -33,13 +33,12 @@ public class MainActivity extends AppCompatActivity {
         FloatingActionButton fabAdd = findViewById(R.id.fabAdd);
 
         adapter = new VaultAdapter(item -> {
-            // نمایش جزییات هنگام لمس کارت
+            // onItemClick
         });
 
         rvVault.setLayoutManager(new LinearLayoutManager(this));
         rvVault.setAdapter(adapter);
 
-        // جستجوی لحظه‌ای با تایپ کاربر
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -59,7 +58,6 @@ public class MainActivity extends AppCompatActivity {
     private void loadVaultData() {
         List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
         if (items.isEmpty()) {
-            // افزودن نمونه تستی اولیه در صورت خالی بودن دیتابیس
             VaultItem sample = new VaultItem("1", "Google Account", "login", "user@gmail.com", "SecureP@ss2026", "ایمیل کاری");
             dbHelper.insertItem(sample, cryptoManager);
             items = dbHelper.getAllDecryptedItems(cryptoManager);
