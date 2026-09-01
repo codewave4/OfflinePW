@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="12dp"
-    android:layout_marginVertical="5dp"
+    android:layout_marginVertical="4dp"
     app:cardCornerRadius="14dp"
     app:cardElevation="0dp"
     app:strokeWidth="1dp"
@@ -16,19 +16,18 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingHorizontal="16dp"
-        android:paddingVertical="14dp">
+        android:padding="16dp">
 
         <TextView
             android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="عنوان رکورد"
+            android:text="Title"
             android:textColor="#F4F4F5"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:ellipsize="end"
             android:maxLines="1"
+            android:ellipsize="end"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toStartOf="@id/tvCategory" />
@@ -39,7 +38,6 @@
             android:layout_height="wrap_content"
             android:text="LOGIN"
             android:textSize="10sp"
-            android:fontFamily="monospace"
             android:textColor="#A1A1AA"
             android:background="#27272A"
             android:paddingHorizontal="8dp"
@@ -48,16 +46,14 @@
             app:layout_constraintTop_toTopOf="@id/tvTitle"
             app:layout_constraintBottom_toBottomOf="@id/tvTitle" />
 
-        <!-- نمایش مقدار به صورت محافظت‌شده و مخفی -->
         <TextView
             android:id="@+id/tvUsername"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="••••••••••••"
+            android:text="•••• •••• ••••"
             android:textColor="#71717A"
             android:textSize="13sp"
-            android:letterSpacing="0.1"
             android:fontFamily="monospace"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
