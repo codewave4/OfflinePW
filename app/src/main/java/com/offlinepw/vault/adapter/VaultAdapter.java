@@ -1,16 +1,11 @@
 package com.offlinepw.vault.adapter;
 
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.offlinepw.vault.R;
 import com.offlinepw.vault.model.VaultItem;
@@ -44,7 +39,8 @@ public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> 
             String lower = query.toLowerCase().trim();
             for (VaultItem item : originalList) {
                 if (item.getTitle().toLowerCase().contains(lower) ||
-                    (item.getUsername() != null && item.getUsername().toLowerCase().contains(lower))) {
+                    (item.getUsername() != null && item.getUsername().toLowerCase().contains(lower)) ||
+                    (item.getCategory() != null && item.getCategory().toLowerCase().contains(lower))) {
                     filteredList.add(item);
                 }
             }
@@ -64,18 +60,21 @@ public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> 
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         VaultItem item = filteredList.get(position);
         holder.tvTitle.setText(item.getTitle());
-        holder.tvUsername.setText(item.getUsername() != null && !item.getUsername().isEmpty() ? item.getUsername() : "—");
-        holder.tvCategory.setText(item.getCategory().toUpperCase());
+        holder.tvCategory.setText(item.getCategory() != null ? item.getCategory().toUpperCase() : "GENERAL");
 
-        holder.btnCopyPass.setOnClickListener(v -> {
-            Context ctx = v.getContext();
-            ClipboardManager clipboard = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-            ClipData clip = ClipData.newPlainText("Password", item.getPassword());
-            if (clipboard != null) {
-                clipboard.setPrimaryClip(clip);
-                Toast.makeText(ctx, "رمز عبور با موفقیت کپی شد", Toast.LENGTH_SHORT).show();
+        // مخفی‌سازی امن اطلاعات حساس در کارت اصلی
+        String val = item.getUsername();
+        if (val != null && !val.trim().isEmpty()) {
+            if (val.length() > 4) {
+                // نمایش ۴ کاراکتر آخر برای شناسایی و مخفی کردن بقیه
+                String last4 = val.substring(val.length() - 4);
+                holder.tvUsername.setText("•••• •••• •••• " + last4);
+            } else {
+                holder.tvUsername.setText("••••••••");
             }
-        });
+        } else {
+            holder.tvUsername.setText("••••••••••••");
+        }
 
         holder.cardRoot.setOnClickListener(v -> {
             if (listener != null) listener.onItemClick(item);
@@ -90,7 +89,6 @@ public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         MaterialCardView cardRoot;
         TextView tvTitle, tvUsername, tvCategory;
-        MaterialButton btnCopyPass;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -98,7 +96,6 @@ public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> 
             tvTitle = itemView.findViewById(R.id.tvTitle);
             tvUsername = itemView.findViewById(R.id.tvUsername);
             tvCategory = itemView.findViewById(R.id.tvCategory);
-            btnCopyPass = itemView.findViewById(R.id.btnCopyPass);
         }
     }
 }
