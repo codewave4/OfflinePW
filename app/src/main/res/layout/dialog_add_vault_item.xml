@@ -20,8 +20,8 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <!-- Title Input -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilTitle"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -38,8 +38,8 @@
                 android:textColor="#F4F4F5" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Category Input -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilCategory"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -57,8 +57,8 @@
                 android:textColor="#F4F4F5" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Username Input -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilUsername"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -75,7 +75,6 @@
                 android:textColor="#F4F4F5" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Password Input with Generator Button -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -84,6 +83,7 @@
             android:gravity="center_vertical">
 
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilPassword"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
@@ -116,8 +116,8 @@
                 app:cornerRadius="10dp" />
         </LinearLayout>
 
-        <!-- Notes Input -->
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilNotes"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -134,7 +134,6 @@
                 android:textColor="#F4F4F5" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
