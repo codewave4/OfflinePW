@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "**" ]
   workflow_dispatch:
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Source Code
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
@@ -18,16 +18,23 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew || true
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
-    - name: Build with Gradle
-      run: gradle assembleDebug --stacktrace || ./gradlew assembleDebug
+    - name: Initialize Wrapper if missing
+      run: |
+        if [ ! -f "gradlew" ]; then
+          gradle wrapper
+        fi
+        chmod +x gradlew
 
-    - name: Upload APK
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+    - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: OfflinePW-App-Debug
         path: app/build/outputs/apk/debug/*.apk
+        if-no-files-found: error
