@@ -19,13 +19,17 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Build with Gradle
-      run: |
-        gradle assembleDebug --stacktrace
+    - name: Setup Gradle 8.4
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.4'
+
+    - name: Build Debug APK
+      run: gradle assembleDebug --stacktrace --no-daemon
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: OfflinePW-Debug-APK
+        name: OfflinePW-App-Debug
         path: app/build/outputs/apk/debug/*.apk
-        if-no-files-found: warn
+        if-no-files-found: error
