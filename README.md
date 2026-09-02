@@ -5,8 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg?logo=android&logoColor=white)](https://android.com)
 [![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-blue.svg)](#security-architecture)
-[![Security](https://img.shields.io/badge/Security-Android%20Keystore%20%2F%20StrongBox-red.svg)](#hardware-backed-keystore)
-[![Internet Permission](https://img.shields.io/badge/Internet%20Permission-None%20(Air--Gapped)-success.svg)](#privacy-guarantee)
+[![Security](https://img.shields.io/badge/Security-Android%20Keystore%20%2F%20StrongBox-red.svg)](#hardware-backed-master-key-android-keystore--strongbox)
+[![Internet Permission](https://img.shields.io/badge/Internet%20Permission-None%20(Air--Gapped)-success.svg)](#zero-network-access-air-gapped)
 
 ---
 
@@ -70,7 +70,7 @@ You can download the ready-to-install Android APK directly from GitHub Releases:
 
 To compile and build the APK yourself:
 
-```bash
+bash
 # Clone the repository
 git clone https://github.com/codewave4/OfflinePW.git
 cd OfflinePW
@@ -78,14 +78,13 @@ cd OfflinePW
 # Build debug APK with Gradle
 ./gradlew assembleDebug
 
----
+📜 License
 
-## 📜 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 <div align="center">
-  <sub>Built with security, simplicity, and complete digital sovereignty in mind.</sub>
+<sub>Built with security, simplicity, and complete digital sovereignty in mind.</sub>
 </div>
+```
+
+
