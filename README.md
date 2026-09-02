@@ -1,90 +1,52 @@
 # 🔒 OfflinePW
 
-> **Air-Gapped, Hardware-Backed, Zero-Knowledge Offline Password & Vault Manager for Android.**
+> **Air-Gapped, Hardware-Backed, Zero-Knowledge Offline Password Vault for Android.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84.svg?logo=android&logoColor=white)](https://android.com)
-[![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-blue.svg)](#security-architecture)
-[![Security](https://img.shields.io/badge/Security-Android%20Keystore%20%2F%20StrongBox-red.svg)](#hardware-backed-master-key-android-keystore--strongbox)
-[![Internet Permission](https://img.shields.io/badge/Internet%20Permission-None%20(Air--Gapped)-success.svg)](#zero-network-access-air-gapped)
+[![Encryption](https://img.shields.io/badge/Encryption-AES--256--GCM-blue.svg)](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
+[![Network](https://img.shields.io/badge/Internet%20Permission-None-success.svg)](#-zero-internet-guarantee)
 
 ---
 
-## 🌟 Overview
+## 🌟 What is OfflinePW?
 
-**OfflinePW** is a minimalist, privacy-first, fully offline password and credential manager built for individuals who prioritize extreme security and sovereign data ownership. 
-
-Unlike traditional password managers that sync data to third-party cloud servers, **OfflinePW is strictly air-gapped**: it does **not** declare or possess internet permissions, making remote telemetry, tracking, or network leaks mathematically impossible.
+**OfflinePW** is a sovereign, 100% offline password and credential manager. It is designed to keep your sensitive accounts, card numbers, and secret notes strictly inside your own device with military-grade encryption and zero cloud dependencies.
 
 ---
 
-## 🛡️ Security Architecture
+## 🛡️ Core Security Features
 
-OfflinePW enforces a multi-layered defense architecture:
-
-### 1. Full Zero-Knowledge Local Encryption (AES-256-GCM)
-Every sensitive field—including **Title**, **Username / Card Number**, **Password**, and **Secure Notes**—is encrypted individually using authenticated **AES-256-GCM (Galois/Counter Mode)** with unique 12-byte initialization vectors (IV) before write operations to the local SQLite database.
-
-### 2. Hardware-Backed Master Key (Android Keystore & StrongBox)
-Master encryption keys are generated and securely stored inside the device's hardware security module (**TEE / StrongBox Keymaster HSM**). The key material is isolated from the main Android OS and cannot be exported or extracted by malware.
-
-### 3. Master PIN Authentication (Zero-Knowledge)
-- Access is guarded by a mandatory **6-digit Master PIN**.
-- The PIN is hashed locally using **SHA-256 with cryptographic salt**.
-- **No Backdoors / No Recovery:** The plaintext PIN is never saved. If forgotten, recovery is mathematically impossible.
-- **Immediate Auto-Lock:** The vault automatically locks and terminates memory state whenever the app is minimized, switched, or backgrounded (`onStop`).
-
-### 4. Anti-Screen Scraping & Memory Isolation (`FLAG_SECURE`)
-Enforces Android's `FLAG_SECURE` window policy:
-- Blocks screen recording and screenshots by other background apps.
-- Hides confidential vault contents from the Android Recent Apps / Multitasking switcher.
-
-### 5. Zero Network Access (Air-Gapped)
-The `AndroidManifest.xml` deliberately **omits `android.permission.INTERNET`**. The app cannot send or receive data over Wi-Fi, cellular, or local networks.
+- 🔐 **AES-256-GCM Encryption:** Every credential (Title, Username/Card, Password, Notes) is encrypted before being stored.
+- 🔑 **Hardware Keystore:** Master keys are securely generated in the device's hardware security chip (**StrongBox / TEE**).
+- 🔢 **6-Digit Master PIN:** Guarded by local SHA-256 hashed PIN authentication.
+- 🚫 **No Backdoors:** No cloud accounts, no servers, and zero data recovery if the PIN is forgotten.
+- 🔒 **Instant Auto-Lock:** Automatically locks as soon as the app is closed or switched.
+- 🛡️ **Anti-Screenshot (`FLAG_SECURE`):** Prevents malware screen recording and hides app content in Recent Apps.
+- 🌐 **Zero Internet Guarantee:** The application has **no internet permissions**, ensuring data never leaves your device.
 
 ---
 
 ## ✨ Features
 
-- 🔐 **Military-Grade Vault:** Store logins, credit/debit card numbers, Wi-Fi keys, and private encrypted notes.
-- 🎲 **Cryptographic Password Generator:** Built-in `SecureRandom` password generator for creating high-entropy passwords (16+ chars).
-- 👁️ **Shoulder-Surfing Protection:** Masked card numbers and credentials (`•••• •••• •••• 7898`) on the primary overview.
-- 🌓 **Dual Nordic Themes:** Seamless switching between deep OLED Dark mode and minimal Light mode.
-- 🌐 **Bilingual Interface:** Instant real-time language toggling between **English** and **Persian (فارسی)**.
-- ⚡ **Zero Bloat & Super Fast:** Built purely with native Android components (no heavy webviews or external bloat).
+- **Store Any Record:** Logins, Credit Cards, Wi-Fi Keys, and Encrypted Notes.
+- **Strong Password Generator:** Built-in cryptographic 16-character password generator.
+- **Privacy Masking:** Concealed values on the home screen to prevent shoulder surfing.
+- **Dual Themes:** Clean OLED Dark mode and minimal Light mode.
+- **Bilingual:** Instant language toggle between English and Persian (فارسی).
 
 ---
 
-## 📥 Download & Installation
+## 📥 Download APK
 
-You can download the ready-to-install Android APK directly from GitHub Releases:
+Get the ready-to-install Android APK directly from GitHub:
 
-1. Go to the [**Releases**](https://github.com/codewave4/OfflinePW/releases) section.
-2. Download the latest **`OfflinePW_1.0.apk`**.
-3. Open the APK on your Android device and tap **Install**.
-   *(Note: If prompted by Google Play Protect, choose "More details" -> "Install anyway", as the APK is built directly from source via GitHub Actions without a Play Store developer certificate).*
+1. Open the [**Releases**](https://github.com/codewave4/OfflinePW/releases) tab.
+2. Download **`OfflinePW_1.0.apk`**.
+3. Install and set your 6-digit Master PIN.
 
 ---
 
-## 🏗️ Building from Source
+## 📜 License
 
-To compile and build the APK yourself:
-
-bash
-# Clone the repository
-git clone https://github.com/codewave4/OfflinePW.git
-cd OfflinePW
-
-# Build debug APK with Gradle
-./gradlew assembleDebug
-
-📜 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-<div align="center">
-<sub>Built with security, simplicity, and complete digital sovereignty in mind.</sub>
-</div>
-```
-
-
+This project is licensed under the **MIT License**.
