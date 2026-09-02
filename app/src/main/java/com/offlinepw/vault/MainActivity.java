@@ -33,6 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private VaultDatabaseHelper dbHelper;
     private CryptoManager cryptoManager;
     private EditText etSearch;
+    private MaterialButton btnAbout;
     private MaterialButton btnLanguage;
     private MaterialButton btnThemeToggle;
     private TextView tvAppTitle;
@@ -62,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
         RecyclerView rvVault = findViewById(R.id.rvVault);
         etSearch = findViewById(R.id.etSearch);
         fabAdd = findViewById(R.id.fabAdd);
+        btnAbout = findViewById(R.id.btnAbout);
         btnLanguage = findViewById(R.id.btnLanguage);
         btnThemeToggle = findViewById(R.id.btnThemeToggle);
 
@@ -83,6 +85,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         fabAdd.setOnClickListener(v -> showAddDialog(null));
+
+        btnAbout.setOnClickListener(v -> showAboutSecurityDialog());
 
         btnLanguage.setOnClickListener(v -> {
             isPersian = !isPersian;
@@ -120,6 +124,8 @@ public class MainActivity extends AppCompatActivity {
             etSearch.setTextColor(Color.parseColor("#F4F4F5"));
             etSearch.setHintTextColor(Color.parseColor("#71717A"));
             
+            btnAbout.setBackgroundColor(Color.parseColor("#18181B"));
+            btnAbout.setTextColor(Color.parseColor("#F4F4F5"));
             btnLanguage.setBackgroundColor(Color.parseColor("#18181B"));
             btnLanguage.setTextColor(Color.parseColor("#F4F4F5"));
             btnThemeToggle.setBackgroundColor(Color.parseColor("#18181B"));
@@ -132,6 +138,8 @@ public class MainActivity extends AppCompatActivity {
             etSearch.setTextColor(Color.parseColor("#09090B"));
             etSearch.setHintTextColor(Color.parseColor("#A1A1AA"));
             
+            btnAbout.setBackgroundColor(Color.parseColor("#E4E4E7"));
+            btnAbout.setTextColor(Color.parseColor("#09090B"));
             btnLanguage.setBackgroundColor(Color.parseColor("#E4E4E7"));
             btnLanguage.setTextColor(Color.parseColor("#09090B"));
             btnThemeToggle.setBackgroundColor(Color.parseColor("#E4E4E7"));
@@ -140,13 +148,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadVaultData() {
+        // بدون داده‌های پیش‌فرض فیک (لیست کاملاً صفر و اختصاصی خود کاربر)
         List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
-        if (items.isEmpty()) {
-            VaultItem sample = new VaultItem(UUID.randomUUID().toString(), "Google Account", "LOGIN", "user@gmail.com", "kX9#mP2$vL8@qW4!", "Main Google Account");
-            dbHelper.insertItem(sample, cryptoManager);
-            items = dbHelper.getAllDecryptedItems(cryptoManager);
-        }
         adapter.setItems(items);
+    }
+
+    private void showAboutSecurityDialog() {
+        String title = isPersian ? "درباره امنیت OfflinePW" : "About OfflinePW Security";
+        String message = isPersian ?
+                "🔒 امنیت و حریم خصوصی ۱۰۰٪ آفلاین:\n\n" +
+                "• تمامی رمزهای عبور، شماره کارت‌ها و یادداشت‌های شما توسط الگوریتم قدرتمند AES-256 رمزنگاری شده و کلید اختصاصی آن در چیپست سخت‌افزاری امن گوشی (Android Keystore) نگهداری می‌شود.\n\n" +
+                "• این برنامه فاقد هرگونه دسترسی به اینترنت (بدون مجوز INTERNET) است؛ بنابراین هیچ داده‌ای هرگز از گوشی شما خارج نخواهد شد.\n\n" +
+                "• تمام اطلاعات فقط و فقط روی حافظه محلی همین دستگاه ذخیره می‌شوند."
+                :
+                "🔒 100% Offline & Private Security:\n\n" +
+                "• All your passwords, card numbers, and notes are encrypted using AES-256 with hardware-backed keys stored inside your device's Android Keystore.\n\n" +
+                "• This application has ZERO internet permissions (No INTERNET permission in Manifest). Not a single byte of data can ever leave your device.\n\n" +
+                "• Everything is strictly saved on your local storage.";
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(isPersian ? "متوجه شدم" : "Got it", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
     private void showAddDialog(VaultItem existingItem) {
@@ -172,7 +196,6 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton btnCancel = dialogView.findViewById(R.id.btnCancel);
         MaterialButton btnSave = dialogView.findViewById(R.id.btnSave);
 
-        // اعمال زبان به تمام فیلدها و هینت‌ها
         if (isPersian) {
             tvDialogTitle.setText(existingItem != null ? "ویرایش رکورد" : "ثبت رکورد جدید");
             tilTitle.setHint("عنوان (مثلاً Google یا کارت بانک)");
