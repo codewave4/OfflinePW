@@ -1,121 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/authRoot"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
     android:background="#09090B"
     android:padding="24dp">
 
-    <!-- دکمه تغییر زبان در بالای صفحه قفل -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnAuthLang"
-        style="@style/Widget.Material3.Button.TonalButton"
-        android:layout_width="wrap_content"
-        android:layout_height="36dp"
-        android:minWidth="44dp"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="0dp"
-        android:text="FA"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:fontFamily="monospace"
-        android:textColor="#F4F4F5"
-        app:backgroundTint="#18181B"
-        app:strokeColor="#27272A"
-        app:strokeWidth="1dp"
-        app:cornerRadius="10dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    <ImageView
+        android:layout_width="72dp"
+        android:layout_height="72dp"
+        android:src="@drawable/ic_launcher"
+        android:layout_marginBottom="16dp" />
 
-    <!-- آیکون قفل -->
     <TextView
-        android:id="@+id/tvLockIcon"
+        android:id="@+id/tvAuthPrompt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔒"
-        android:textSize="48sp"
-        app:layout_constraintBottom_toTopOf="@id/tvAuthTitle"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btnAuthLang"
-        app:layout_constraintVertical_chainStyle="packed" />
-
-    <!-- عنوان -->
-    <TextView
-        android:id="@+id/tvAuthTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="ورود به OFFLINEPW"
+        android:text="رمز مستر ۶ رقمی را وارد کنید"
         android:textColor="#F4F4F5"
         android:textSize="18sp"
         android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@id/tvAuthWarning"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvLockIcon" />
+        android:layout_marginBottom="20dp" />
 
-    <!-- متن هشدار عدم امکان بازیابی -->
     <TextView
-        android:id="@+id/tvAuthWarning"
-        android:layout_width="match_parent"
+        android:id="@+id/tvPinIndicator"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:gravity="center"
-        android:lineSpacingExtra="3dp"
-        android:text="رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است."
-        android:textColor="#EF4444"
-        android:textSize="12sp"
-        app:layout_constraintBottom_toTopOf="@id/tilPin"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvAuthTitle" />
+        android:text="○ ○ ○ ○ ○ ○"
+        android:textColor="#3B82F6"
+        android:textSize="26sp"
+        android:letterSpacing="0.2"
+        android:layout_marginBottom="32dp" />
 
-    <!-- کادر پین کد ۶ رقمی -->
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/tilPin"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_width="220dp"
+    <!-- کیپد عددی -->
+    <GridLayout
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:hint="پین کد ۶ رقمی"
-        android:textColorHint="#71717A"
-        app:boxStrokeColor="#A1A1AA"
-        app:hintTextColor="#F4F4F5"
-        app:layout_constraintBottom_toTopOf="@id/btnSubmitPin"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvAuthWarning">
+        android:columnCount="3"
+        android:alignmentMode="alignMargins"
+        android:columnOrderPreserved="true">
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/etPin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:inputType="numberPassword"
-            android:letterSpacing="0.3"
-            android:maxLength="6"
-            android:textColor="#F4F4F5"
-            android:textSize="20sp" />
-    </com.google.android.material.textfield.TextInputLayout>
+        <Button android:id="@+id/btn1" style="@style/Widget.Material3.Button.TonalButton" android:text="1" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn2" style="@style/Widget.Material3.Button.TonalButton" android:text="2" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn3" style="@style/Widget.Material3.Button.TonalButton" android:text="3" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
 
-    <!-- دکمه ورود / تأیید پین -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btnSubmitPin"
-        android:layout_width="220dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="20dp"
-        android:text="ورود"
-        android:textColor="#09090B"
-        android:textSize="15sp"
-        android:textStyle="bold"
-        app:backgroundTint="#F4F4F5"
-        app:cornerRadius="12dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tilPin" />
+        <Button android:id="@+id/btn4" style="@style/Widget.Material3.Button.TonalButton" android:text="4" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn5" style="@style/Widget.Material3.Button.TonalButton" android:text="5" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn6" style="@style/Widget.Material3.Button.TonalButton" android:text="6" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <Button android:id="@+id/btn7" style="@style/Widget.Material3.Button.TonalButton" android:text="7" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn8" style="@style/Widget.Material3.Button.TonalButton" android:text="8" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btn9" style="@style/Widget.Material3.Button.TonalButton" android:text="9" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+
+        <Space android:layout_width="72dp" android:layout_height="72dp" android:layout_margin="8dp"/>
+        <Button android:id="@+id/btn0" style="@style/Widget.Material3.Button.TonalButton" android:text="0" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Button android:id="@+id/btnBackspace" style="@style/Widget.Material3.Button.TextButton" android:text="⌫" android:layout_margin="8dp" android:textSize="22sp" android:textColor="#EF4444" android:minWidth="72dp" android:minHeight="72dp"/>
+    </GridLayout>
+
+</LinearLayout>
