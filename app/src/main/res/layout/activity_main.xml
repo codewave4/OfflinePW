@@ -24,7 +24,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent">
 
-                <!-- عنوان بدون پسوند نوردیک -->
+                <!-- عنوان برنامه -->
                 <TextView
                     android:id="@+id/tvAppTitle"
                     android:layout_width="wrap_content"
@@ -39,7 +39,7 @@
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent" />
 
-                <!-- دکمه‌های سمت راست متناسب با UI نوردیک -->
+                <!-- دکمه‌های ۳ تایی کنترل بالا (؟ ، زبان ، تم) -->
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -49,7 +49,25 @@
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent">
 
-                    <!-- دکمه تغییر زبان -->
+                    <!-- دکمه درباره امنیت و حریم خصوصی (?) -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAbout"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:padding="0dp"
+                        android:text="?"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:textColor="#F4F4F5"
+                        app:backgroundTint="#18181B"
+                        app:strokeColor="#27272A"
+                        app:strokeWidth="1dp"
+                        app:cornerRadius="10dp"
+                        android:layout_marginEnd="6dp" />
+
+                    <!-- دکمه تغییر زبان (FA / EN) -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnLanguage"
                         style="@style/Widget.Material3.Button.TonalButton"
@@ -69,15 +87,19 @@
                         app:cornerRadius="10dp"
                         android:layout_marginEnd="6dp" />
 
-                    <!-- دکمه دارک/لایت مود -->
+                    <!-- دکمه تغییر تم (DARK / LIGHT) -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnThemeToggle"
                         style="@style/Widget.Material3.Button.TonalButton"
-                        android:layout_width="40dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="36dp"
-                        android:padding="0dp"
-                        android:text="🌙"
-                        android:textSize="13sp"
+                        android:minWidth="46dp"
+                        android:paddingHorizontal="8dp"
+                        android:paddingVertical="0dp"
+                        android:text="DARK"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
                         android:textColor="#F4F4F5"
                         app:backgroundTint="#18181B"
                         app:strokeColor="#27272A"
