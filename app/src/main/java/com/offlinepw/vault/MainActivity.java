@@ -8,6 +8,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -48,6 +49,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // تدبیر امنیتی مهم: جلوگیری از اسکرین‌شات، ضبط تصویر و نشت داده در Recent Apps
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+
         setContentView(R.layout.activity_main);
 
         prefs = getSharedPreferences("OfflinePW_Prefs", MODE_PRIVATE);
@@ -148,28 +153,37 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadVaultData() {
-        // بدون داده‌های پیش‌فرض فیک (لیست کاملاً صفر و اختصاصی خود کاربر)
         List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
         adapter.setItems(items);
     }
 
     private void showAboutSecurityDialog() {
-        String title = isPersian ? "درباره امنیت OfflinePW" : "About OfflinePW Security";
+        String title = isPersian ? "معماری امنیت و حریم خصوصی" : "Security & Privacy Architecture";
         String message = isPersian ?
-                "🔒 امنیت و حریم خصوصی ۱۰۰٪ آفلاین:\n\n" +
-                "• تمامی رمزهای عبور، شماره کارت‌ها و یادداشت‌های شما توسط الگوریتم قدرتمند AES-256 رمزنگاری شده و کلید اختصاصی آن در چیپست سخت‌افزاری امن گوشی (Android Keystore) نگهداری می‌شود.\n\n" +
-                "• این برنامه فاقد هرگونه دسترسی به اینترنت (بدون مجوز INTERNET) است؛ بنابراین هیچ داده‌ای هرگز از گوشی شما خارج نخواهد شد.\n\n" +
-                "• تمام اطلاعات فقط و فقط روی حافظه محلی همین دستگاه ذخیره می‌شوند."
+                "🔐 مشخصات امنیتی OfflinePW (Open-Source):\n\n" +
+                "۱. رمزنگاری کامل (Zero-Knowledge Local):\n" +
+                "تمام فیلدها شامل عنوان، نام کاربری، شماره کارت، رمز عبور و یادداشت‌ها با الگوریتم قدرتمند AES-256-GCM به صورت رمزنگاری‌شده در دیتابیس ذخیره می‌شوند.\n\n" +
+                "۲. امنیت سخت‌افزاری (Hardware Keystore / StrongBox):\n" +
+                "کلید رمزنگاری مستقیماً در سخت‌افزار امن دستگاه (TEE/StrongBox) نگهداری می‌شود و قابل استخراج نیست.\n\n" +
+                "۳. عدم دسترسی به اینترنت (Air-Gapped):\n" +
+                "برنامه فاقد هرگونه مجوز دسترسی به اینترنت (بدون INTERNET permission) است؛ در نتیجه نشت داده‌ها به سرور غیرممکن است.\n\n" +
+                "۴. حفاظت از صفحه (Anti-Screen Capture):\n" +
+                "قابلیت FLAG_SECURE مانع از عکس‌برداری یا ضبط صفحه توسط بدافزارها می‌شود."
                 :
-                "🔒 100% Offline & Private Security:\n\n" +
-                "• All your passwords, card numbers, and notes are encrypted using AES-256 with hardware-backed keys stored inside your device's Android Keystore.\n\n" +
-                "• This application has ZERO internet permissions (No INTERNET permission in Manifest). Not a single byte of data can ever leave your device.\n\n" +
-                "• Everything is strictly saved on your local storage.";
+                "🔐 OfflinePW Security Architecture (Open-Source):\n\n" +
+                "1. Full Zero-Knowledge Local Encryption:\n" +
+                "All fields (Title, Card Number/Username, Password, Notes) are encrypted using AES-256-GCM before writing to the database.\n\n" +
+                "2. Hardware-Backed Keys (Keystore & StrongBox):\n" +
+                "Master keys are generated inside the device's hardware security module (TEE / StrongBox HSM) and never exposed.\n\n" +
+                "3. Air-Gapped / Zero Internet:\n" +
+                "Zero network permissions (No android.permission.INTERNET). Zero tracking, zero telemetry.\n\n" +
+                "4. Anti-Screen Capture:\n" +
+                "Enforced FLAG_SECURE prevents malware screen scraping and screen recording.";
 
         new AlertDialog.Builder(this)
                 .setTitle(title)
                 .setMessage(message)
-                .setPositiveButton(isPersian ? "متوجه شدم" : "Got it", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton(isPersian ? "تأیید" : "Close", (dialog, which) -> dialog.dismiss())
                 .show();
     }
 
@@ -250,7 +264,7 @@ public class MainActivity extends AppCompatActivity {
             dbHelper.insertItem(item, cryptoManager);
             loadVaultData();
             dialog.dismiss();
-            Toast.makeText(this, isPersian ? "با موفقیت ذخیره شد" : "Saved securely", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isPersian ? "با موفقیت و رمزنگاری سخت‌افزاری ذخیره شد" : "Saved with hardware encryption", Toast.LENGTH_SHORT).show();
         });
 
         dialog.show();
@@ -267,7 +281,7 @@ public class MainActivity extends AppCompatActivity {
                     if (which == 0) {
                         showAddDialog(item);
                     } else if (which == 1) {
-                        copyToClipboard(isPersian ? "نام کاربری" : "Username", item.getUsername());
+                        copyToClipboard(isPersian ? "نام کاربری / شماره" : "Username / Card", item.getUsername());
                     } else if (which == 2) {
                         copyToClipboard(isPersian ? "رمز عبور" : "Password", item.getPassword());
                     } else if (which == 3) {
