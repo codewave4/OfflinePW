@@ -1,51 +1,20 @@
-plugins {
-    id 'com.android.application'
-}
-
-android {
-    namespace 'com.offlinepw.vault'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.offlinepw.vault"
-        minSdk 26
-        targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
     }
-
-    signingConfigs {
-        release {
-            storeFile file("release.keystore")
-            storePassword "OfflinePW_Secure_2026"
-            keyAlias "offlinepw_key"
-            keyPassword "OfflinePW_Secure_2026"
-            v1SigningEnabled true
-            v2SigningEnabled true
-        }
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            signingConfig signingConfigs.release
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-        debug {
-            signingConfig signingConfigs.release
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
     }
 }
 
-dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+tasks.register('clean', Delete) {
+    delete rootProject.buildDir
 }
