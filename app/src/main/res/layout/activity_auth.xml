@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/authRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#09090B"
+    android:padding="24dp">
+
+    <!-- دکمه تغییر زبان در بالای صفحه قفل -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnAuthLang"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:minWidth="44dp"
+        android:paddingHorizontal="10dp"
+        android:paddingVertical="0dp"
+        android:text="FA"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:fontFamily="monospace"
+        android:textColor="#F4F4F5"
+        app:backgroundTint="#18181B"
+        app:strokeColor="#27272A"
+        app:strokeWidth="1dp"
+        app:cornerRadius="10dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- آیکون قفل -->
+    <TextView
+        android:id="@+id/tvLockIcon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔒"
+        android:textSize="48sp"
+        app:layout_constraintBottom_toTopOf="@id/tvAuthTitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnAuthLang"
+        app:layout_constraintVertical_chainStyle="packed" />
+
+    <!-- عنوان -->
+    <TextView
+        android:id="@+id/tvAuthTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="ورود به OFFLINEPW"
+        android:textColor="#F4F4F5"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@id/tvAuthWarning"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvLockIcon" />
+
+    <!-- متن هشدار عدم امکان بازیابی -->
+    <TextView
+        android:id="@+id/tvAuthWarning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:lineSpacingExtra="3dp"
+        android:text="رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است."
+        android:textColor="#EF4444"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toTopOf="@id/tilPin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvAuthTitle" />
+
+    <!-- کادر پین کد ۶ رقمی -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilPin"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="220dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:hint="پین کد ۶ رقمی"
+        android:textColorHint="#71717A"
+        app:boxStrokeColor="#A1A1AA"
+        app:hintTextColor="#F4F4F5"
+        app:layout_constraintBottom_toTopOf="@id/btnSubmitPin"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tvAuthWarning">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etPin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:inputType="numberPassword"
+            android:letterSpacing="0.3"
+            android:maxLength="6"
+            android:textColor="#F4F4F5"
+            android:textSize="20sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- دکمه ورود / تأیید پین -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSubmitPin"
+        android:layout_width="220dp"
+        android:layout_height="52dp"
+        android:layout_marginTop="20dp"
+        android:text="ورود"
+        android:textColor="#09090B"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        app:backgroundTint="#F4F4F5"
+        app:cornerRadius="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tilPin" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
