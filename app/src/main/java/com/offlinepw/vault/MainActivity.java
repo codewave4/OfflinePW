@@ -49,10 +49,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // جلوگیری از اسکرین‌شات و ضبط تصویر برای حفظ امنیت رمزها
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-
         setContentView(R.layout.activity_main);
 
         prefs = getSharedPreferences("OfflinePW_Prefs", MODE_PRIVATE);
@@ -90,7 +87,6 @@ public class MainActivity extends AppCompatActivity {
         });
 
         fabAdd.setOnClickListener(v -> showAddDialog(null));
-
         btnAbout.setOnClickListener(v -> showAboutSecurityDialog());
 
         btnLanguage.setOnClickListener(v -> {
@@ -113,8 +109,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        // قفل خودکار: به محض خروج یا مینیمایز کردن برنامه، صفحه اصلی بسته می‌شود
-        // تا در ورود مجدد، حتماً صفحه پین ۶ رقمی باز شود
+        // خروج آنی به محض بستن یا مینیمایز شدن برنامه برای قفل امن
         finish();
     }
 
@@ -168,25 +163,21 @@ public class MainActivity extends AppCompatActivity {
     private void showAboutSecurityDialog() {
         String title = isPersian ? "معماری امنیت و حریم خصوصی" : "Security & Privacy Architecture";
         String message = isPersian ?
-                "🔐 مشخصات امنیتی OfflinePW (Open-Source):\n\n" +
+                "🔐 مشخصات امنیتی OfflinePW:\n\n" +
                 "۱. رمزنگاری کامل (Zero-Knowledge Local):\n" +
-                "تمام فیلدها شامل عنوان، نام کاربری، شماره کارت، رمز عبور و یادداشت‌ها با الگوریتم قدرتمند AES-256-GCM به صورت رمزنگاری‌شده در دیتابیس ذخیره می‌شوند.\n\n" +
-                "۲. امنیت سخت‌افزاری (Hardware Keystore / StrongBox):\n" +
-                "کلید رمزنگاری مستقیماً در سخت‌افزار امن دستگاه (TEE/StrongBox) نگهداری می‌شود و قابل استخراج نیست.\n\n" +
-                "۳. عدم دسترسی به اینترنت (Air-Gapped):\n" +
-                "برنامه فاقد هرگونه مجوز دسترسی به اینترنت (بدون INTERNET permission) است؛ در نتیجه نشت داده‌ها به سرور غیرممکن است.\n\n" +
-                "۴. حفاظت از صفحه (Anti-Screen Capture):\n" +
-                "قابلیت FLAG_SECURE مانع از عکس‌برداری یا ضبط صفحه توسط بدافزارها می‌شود."
+                "تمام فیلدها با AES-256-GCM رمزنگاری می‌شوند.\n\n" +
+                "۲. امنیت سخت‌افزاری (Hardware Keystore):\n" +
+                "کلید در ماژول امنیتی دستگاه نگهداری می‌شود.\n\n" +
+                "۳. بدون اینترنت (Air-Gapped):\n" +
+                "برنامه هیچ مجوزی برای اتصال به اینترنت ندارد.\n\n" +
+                "۴. ضد اسکرین‌شات (FLAG_SECURE):\n" +
+                "جلوگیری از ضبط یا تصویربرداری از رمزها."
                 :
-                "🔐 OfflinePW Security Architecture (Open-Source):\n\n" +
-                "1. Full Zero-Knowledge Local Encryption:\n" +
-                "All fields (Title, Card Number/Username, Password, Notes) are encrypted using AES-256-GCM before writing to the database.\n\n" +
-                "2. Hardware-Backed Keys (Keystore & StrongBox):\n" +
-                "Master keys are generated inside the device's hardware security module (TEE / StrongBox HSM) and never exposed.\n\n" +
-                "3. Air-Gapped / Zero Internet:\n" +
-                "Zero network permissions (No android.permission.INTERNET). Zero tracking, zero telemetry.\n\n" +
-                "4. Anti-Screen Capture:\n" +
-                "Enforced FLAG_SECURE prevents malware screen scraping and screen recording.";
+                "🔐 OfflinePW Security Architecture:\n\n" +
+                "1. Full Zero-Knowledge Local AES-256-GCM Encryption.\n" +
+                "2. Hardware-Backed Keystore / TEE Protection.\n" +
+                "3. Air-Gapped / Zero Internet Permissions.\n" +
+                "4. Anti-Screen Scraping (FLAG_SECURE).";
 
         new AlertDialog.Builder(this)
                 .setTitle(title)
@@ -272,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
             dbHelper.insertItem(item, cryptoManager);
             loadVaultData();
             dialog.dismiss();
-            Toast.makeText(this, isPersian ? "با موفقیت و رمزنگاری سخت‌افزاری ذخیره شد" : "Saved with hardware encryption", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isPersian ? "با موفقیت ذخیره شد" : "Saved successfully", Toast.LENGTH_SHORT).show();
         });
 
         dialog.show();
