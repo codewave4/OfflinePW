@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build and Sign Release APK
 
 on:
   push:
@@ -24,12 +24,29 @@ jobs:
       with:
         gradle-version: '8.4'
 
-    - name: Build Debug APK
-      run: gradle assembleDebug --stacktrace --no-daemon
+    - name: Generate Release Keystore
+      run: |
+        keytool -genkeypair -v \
+          -keystore app/release.keystore \
+          -alias offlinepw_key \
+          -keyalg RSA \
+          -keysize 2048 \
+          -validity 10000 \
+          -storepass "OfflinePW_Secure_2026" \
+          -keypass "OfflinePW_Secure_2026" \
+          -dname "CN=OfflinePW, OU=Security, O=CodeWave, L=Tehran, ST=Tehran, C=IR"
 
-    - name: Upload APK
+    - name: Build Signed Release APK
+      run: gradle assembleRelease --stacktrace --no-daemon
+
+    - name: Prepare APK Output
+      run: |
+        mkdir -p output_apk
+        cp app/build/outputs/apk/release/*.apk output_apk/OfflinePW_1.0.apk
+
+    - name: Upload Signed Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: OfflinePW-App-Debug
-        path: app/build/outputs/apk/debug/*.apk
+        name: OfflinePW_1.0_Signed
+        path: output_apk/OfflinePW_1.0.apk
         if-no-files-found: error
