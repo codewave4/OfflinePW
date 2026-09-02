@@ -12,13 +12,13 @@ import java.util.List;
 
 public class VaultDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "offlinepw_vault.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     public static final String TABLE_ITEMS = "vault_items";
     public static final String COLUMN_ID = "id";
-    public static final String COLUMN_TITLE = "title";
+    public static final String COLUMN_TITLE_ENC = "title_enc";
     public static final String COLUMN_CATEGORY = "category";
-    public static final String COLUMN_USERNAME = "username";
+    public static final String COLUMN_USERNAME_ENC = "username_enc";
     public static final String COLUMN_PASSWORD_ENC = "password_enc";
     public static final String COLUMN_NOTES_ENC = "notes_enc";
     public static final String COLUMN_IS_FAV = "is_favorite";
@@ -31,9 +31,9 @@ public class VaultDatabaseHelper extends SQLiteOpenHelper {
     public void onCreate(SQLiteDatabase db) {
         String CREATE_TABLE = "CREATE TABLE " + TABLE_ITEMS + " ("
                 + COLUMN_ID + " TEXT PRIMARY KEY,"
-                + COLUMN_TITLE + " TEXT,"
+                + COLUMN_TITLE_ENC + " TEXT,"
                 + COLUMN_CATEGORY + " TEXT,"
-                + COLUMN_USERNAME + " TEXT,"
+                + COLUMN_USERNAME_ENC + " TEXT,"
                 + COLUMN_PASSWORD_ENC + " TEXT,"
                 + COLUMN_NOTES_ENC + " TEXT,"
                 + COLUMN_IS_FAV + " INTEGER DEFAULT 0)";
@@ -50,13 +50,14 @@ public class VaultDatabaseHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_ID, item.getId());
-        values.put(COLUMN_TITLE, item.getTitle());
+        // تمام فیلدهای حساس با الگوریتم AES-256 رمزنگاری می‌شوند
+        values.put(COLUMN_TITLE_ENC, crypto.encrypt(item.getTitle()));
         values.put(COLUMN_CATEGORY, item.getCategory());
-        values.put(COLUMN_USERNAME, item.getUsername());
+        values.put(COLUMN_USERNAME_ENC, crypto.encrypt(item.getUsername()));
         values.put(COLUMN_PASSWORD_ENC, crypto.encrypt(item.getPassword()));
         values.put(COLUMN_NOTES_ENC, crypto.encrypt(item.getNotes()));
         values.put(COLUMN_IS_FAV, item.isFavorite() ? 1 : 0);
-        db.insert(TABLE_ITEMS, null, values);
+        db.insertWithOnConflict(TABLE_ITEMS, null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public List<VaultItem> getAllDecryptedItems(CryptoManager crypto) {
@@ -68,9 +69,9 @@ public class VaultDatabaseHelper extends SQLiteOpenHelper {
             do {
                 VaultItem item = new VaultItem();
                 item.setId(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ID)));
-                item.setTitle(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE)));
+                item.setTitle(crypto.decrypt(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TITLE_ENC))));
                 item.setCategory(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_CATEGORY)));
-                item.setUsername(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAME)));
+                item.setUsername(crypto.decrypt(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USERNAME_ENC))));
                 item.setPassword(crypto.decrypt(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PASSWORD_ENC))));
                 item.setNotes(crypto.decrypt(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_NOTES_ENC))));
                 item.setFavorite(cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_IS_FAV)) == 1);
