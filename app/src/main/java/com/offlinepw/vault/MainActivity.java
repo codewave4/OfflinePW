@@ -50,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // تدبیر امنیتی مهم: جلوگیری از اسکرین‌شات، ضبط تصویر و نشت داده در Recent Apps
+        // جلوگیری از اسکرین‌شات و ضبط تصویر برای حفظ امنیت رمزها
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
 
         setContentView(R.layout.activity_main);
@@ -108,6 +108,14 @@ public class MainActivity extends AppCompatActivity {
         updateLanguageUI();
         updateThemeUI();
         loadVaultData();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // قفل خودکار: به محض خروج یا مینیمایز کردن برنامه، صفحه اصلی بسته می‌شود
+        // تا در ورود مجدد، حتماً صفحه پین ۶ رقمی باز شود
+        finish();
     }
 
     private void updateLanguageUI() {
