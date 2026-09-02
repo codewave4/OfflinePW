@@ -77,13 +77,3 @@ cd OfflinePW
 
 # Build debug APK with Gradle
 ./gradlew assembleDebug
-
-📜 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-<div align="center">
-<sub>Built with security, simplicity, and complete digital sovereignty in mind.</sub>
-</div>
-```
-
