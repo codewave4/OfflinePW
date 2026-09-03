@@ -10,15 +10,18 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -28,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -206,28 +210,81 @@ public class MainActivity extends AppCompatActivity {
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_vault_record, parent, false);
-            return new ViewHolder(view);
+            Context ctx = parent.getContext();
+            MaterialCardView card = new MaterialCardView(ctx);
+            RecyclerView.LayoutParams cardLp = new RecyclerView.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(24, 12, 24, 12);
+            card.setLayoutParams(cardLp);
+            card.setRadius(24f);
+            card.setStrokeWidth(1);
+            card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
+            card.setCardBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+            card.setCardElevation(2f);
+
+            LinearLayout root = new LinearLayout(ctx);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(32, 28, 32, 28);
+
+            LinearLayout header = new LinearLayout(ctx);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView tvTitle = new TextView(ctx);
+            tvTitle.setTextSize(17f);
+            tvTitle.setTypeface(null, Typeface.BOLD);
+            tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+            LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            header.addView(tvTitle, titleLp);
+
+            TextView tvCategory = new TextView(ctx);
+            tvCategory.setTextSize(11f);
+            tvCategory.setTypeface(null, Typeface.BOLD);
+            tvCategory.setTextColor(Color.parseColor("#3B82F6"));
+            tvCategory.setBackgroundColor(Color.parseColor(isDarkMode ? "#1E293B" : "#EFF6FF"));
+            tvCategory.setPadding(18, 6, 18, 6);
+            header.addView(tvCategory);
+
+            root.addView(header);
+
+            TextView tvUsername = new TextView(ctx);
+            tvUsername.setTextSize(14f);
+            tvUsername.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+            tvUsername.setPadding(0, 12, 0, 0);
+            root.addView(tvUsername);
+
+            TextView tvMasked = new TextView(ctx);
+            tvMasked.setTextSize(13f);
+            tvMasked.setTextColor(Color.parseColor("#10B981"));
+            tvMasked.setText("•••• •••• •••• ••••");
+            tvMasked.setPadding(0, 6, 0, 0);
+            root.addView(tvMasked);
+
+            card.addView(root);
+            return new ViewHolder(card, tvTitle, tvCategory, tvUsername, tvMasked);
         }
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             VaultItem item = displayList.get(position);
             holder.tvTitle.setText(item.getTitle());
-            holder.tvCategory.setText(item.getCategory().toUpperCase());
-            
-            // مخفی‌سازی هوشمند برای محافظت در برابر دید دیگران
+            holder.tvCategory.setText(item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN");
+
             if (item.getUsername() != null && !item.getUsername().isEmpty()) {
                 if (item.getUsername().length() > 4) {
                     holder.tvUsername.setText("•••• •••• " + item.getUsername().substring(item.getUsername().length() - 4));
                 } else {
-                    holder.tvUsername.setText("••••");
+                    holder.tvUsername.setText(item.getUsername());
                 }
             } else {
                 holder.tvUsername.setText("•••• •••• ••••");
             }
 
-            holder.itemView.setOnClickListener(v -> {
+            holder.card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
+            holder.card.setCardBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+            holder.tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+
+            holder.card.setOnClickListener(v -> {
                 if (listener != null) listener.onItemClick(item);
             });
         }
@@ -238,13 +295,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public class ViewHolder extends RecyclerView.ViewHolder {
-            TextView tvTitle, tvCategory, tvUsername;
+            MaterialCardView card;
+            TextView tvTitle, tvCategory, tvUsername, tvMasked;
 
-            public ViewHolder(@NonNull View itemView) {
+            public ViewHolder(@NonNull View itemView, TextView t, TextView c, TextView u, TextView m) {
                 super(itemView);
-                tvTitle = itemView.findViewById(R.id.tvRecordTitle);
-                tvCategory = itemView.findViewById(R.id.tvRecordCategory);
-                tvUsername = itemView.findViewById(R.id.tvRecordUsername);
+                card = (MaterialCardView) itemView;
+                tvTitle = t;
+                tvCategory = c;
+                tvUsername = u;
+                tvMasked = m;
             }
         }
     }
@@ -377,6 +437,7 @@ public class MainActivity extends AppCompatActivity {
             btnThemeToggle.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#E4E4E7"));
             btnThemeToggle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
         }
+        adapter.notifyDataSetChanged();
     }
 
     private void loadVaultData() {
