@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -7,21 +8,65 @@
     android:background="#09090B"
     android:padding="24dp">
 
+    <!-- دکمه جابجایی زبان در گوشه بالا -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:layout_marginBottom="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAuthLang"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:text="FA"
+            android:textColor="#F4F4F5"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            app:backgroundTint="#18181B"
+            app:cornerRadius="12dp"
+            app:strokeColor="#27272A"
+            app:strokeWidth="1dp" />
+    </LinearLayout>
+
     <ImageView
-        android:layout_width="72dp"
-        android:layout_height="72dp"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
         android:src="@drawable/ic_launcher"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="12dp" />
+
+    <TextView
+        android:id="@+id/tvAuthTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="OfflinePW"
+        android:textColor="#F4F4F5"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="6dp" />
 
     <TextView
         android:id="@+id/tvAuthPrompt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="رمز مستر ۶ رقمی را وارد کنید"
-        android:textColor="#F4F4F5"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="20dp" />
+        android:textColor="#A1A1AA"
+        android:textSize="15sp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- متن هشدار مهم امنیتی بدون امکان بازیابی -->
+    <TextView
+        android:id="@+id/tvAuthWarning"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است."
+        android:textColor="#EF4444"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="24dp" />
 
     <TextView
         android:id="@+id/tvPinIndicator"
@@ -31,9 +76,9 @@
         android:textColor="#3B82F6"
         android:textSize="26sp"
         android:letterSpacing="0.2"
-        android:layout_marginBottom="32dp" />
+        android:layout_marginBottom="28dp" />
 
-    <!-- کیپد عددی -->
+    <!-- کیپد عددی با رنگ خنثی نوردیک و بدون رنگ صورتی -->
     <GridLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -41,21 +86,21 @@
         android:alignmentMode="alignMargins"
         android:columnOrderPreserved="true">
 
-        <Button android:id="@+id/btn1" style="@style/Widget.Material3.Button.TonalButton" android:text="1" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn2" style="@style/Widget.Material3.Button.TonalButton" android:text="2" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn3" style="@style/Widget.Material3.Button.TonalButton" android:text="3" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn1" style="@style/Widget.Material3.Button.TonalButton" android:text="1" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn2" style="@style/Widget.Material3.Button.TonalButton" android:text="2" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn3" style="@style/Widget.Material3.Button.TonalButton" android:text="3" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
 
-        <Button android:id="@+id/btn4" style="@style/Widget.Material3.Button.TonalButton" android:text="4" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn5" style="@style/Widget.Material3.Button.TonalButton" android:text="5" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn6" style="@style/Widget.Material3.Button.TonalButton" android:text="6" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn4" style="@style/Widget.Material3.Button.TonalButton" android:text="4" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn5" style="@style/Widget.Material3.Button.TonalButton" android:text="5" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn6" style="@style/Widget.Material3.Button.TonalButton" android:text="6" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
 
-        <Button android:id="@+id/btn7" style="@style/Widget.Material3.Button.TonalButton" android:text="7" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn8" style="@style/Widget.Material3.Button.TonalButton" android:text="8" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btn9" style="@style/Widget.Material3.Button.TonalButton" android:text="9" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn7" style="@style/Widget.Material3.Button.TonalButton" android:text="7" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn8" style="@style/Widget.Material3.Button.TonalButton" android:text="8" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn9" style="@style/Widget.Material3.Button.TonalButton" android:text="9" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
 
-        <Space android:layout_width="72dp" android:layout_height="72dp" android:layout_margin="8dp"/>
-        <Button android:id="@+id/btn0" style="@style/Widget.Material3.Button.TonalButton" android:text="0" android:layout_margin="8dp" android:textSize="20sp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <Button android:id="@+id/btnBackspace" style="@style/Widget.Material3.Button.TextButton" android:text="⌫" android:layout_margin="8dp" android:textSize="22sp" android:textColor="#EF4444" android:minWidth="72dp" android:minHeight="72dp"/>
+        <Space android:layout_width="72dp" android:layout_height="72dp" android:layout_margin="6dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btn0" style="@style/Widget.Material3.Button.TonalButton" android:text="0" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnBackspace" style="@style/Widget.Material3.Button.TonalButton" android:text="⌫" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#EF4444" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
     </GridLayout>
 
 </LinearLayout>
