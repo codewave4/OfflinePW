@@ -3,26 +3,31 @@ package com.offlinepw.vault;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 public class AuthActivity extends AppCompatActivity {
-    private static final String PREF_NAME = "OfflinePW_Auth";
+    private static final String PREF_AUTH = "OfflinePW_Auth";
+    private static final String PREF_SETTINGS = "OfflinePW_Prefs";
     private static final String KEY_PIN_HASH = "master_pin_hash";
     private static final String KEY_IS_SETUP = "pin_is_setup";
 
     private SharedPreferences authPrefs;
+    private SharedPreferences settingsPrefs;
     private TextView tvAuthPrompt;
+    private TextView tvAuthWarning;
     private TextView tvPinIndicator;
+    private MaterialButton btnAuthLang;
     private final StringBuilder currentPin = new StringBuilder();
     private boolean isSettingUpPin = false;
     private String tempPinToConfirm = null;
+    private boolean isPersian = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -30,20 +35,52 @@ public class AuthActivity extends AppCompatActivity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
         setContentView(R.layout.activity_auth);
 
-        authPrefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
+        authPrefs = getSharedPreferences(PREF_AUTH, MODE_PRIVATE);
+        settingsPrefs = getSharedPreferences(PREF_SETTINGS, MODE_PRIVATE);
+        isPersian = settingsPrefs.getBoolean("is_persian", true);
+
         tvAuthPrompt = findViewById(R.id.tvAuthPrompt);
+        tvAuthWarning = findViewById(R.id.tvAuthWarning);
         tvPinIndicator = findViewById(R.id.tvPinIndicator);
+        btnAuthLang = findViewById(R.id.btnAuthLang);
 
         boolean isSetup = authPrefs.getBoolean(KEY_IS_SETUP, false);
-        if (!isSetup) {
-            isSettingUpPin = true;
-            if (tvAuthPrompt != null) tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
-        } else {
-            isSettingUpPin = false;
-            if (tvAuthPrompt != null) tvAuthPrompt.setText("رمز مستر ۶ رقمی را وارد کنید");
+        isSettingUpPin = !isSetup;
+
+        if (btnAuthLang != null) {
+            btnAuthLang.setOnClickListener(v -> {
+                isPersian = !isPersian;
+                settingsPrefs.edit().putBoolean("is_persian", isPersian).apply();
+                updateTexts();
+            });
         }
 
+        updateTexts();
         setupNumericKeypad();
+    }
+
+    private void updateTexts() {
+        if (btnAuthLang != null) {
+            btnAuthLang.setText(isPersian ? "FA" : "EN");
+        }
+
+        if (tvAuthWarning != null) {
+            tvAuthWarning.setText(isPersian ?
+                    "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است." :
+                    "Your master PIN is never stored; therefore, if forgotten, recovery is mathematically impossible.");
+        }
+
+        if (tvAuthPrompt != null) {
+            if (isSettingUpPin) {
+                if (tempPinToConfirm == null) {
+                    tvAuthPrompt.setText(isPersian ? "یک رمز ۶ رقمی مستر تعیین کنید" : "Create a 6-digit Master PIN");
+                } else {
+                    tvAuthPrompt.setText(isPersian ? "تکرار رمز ۶ رقمی برای تأیید:" : "Confirm your 6-digit Master PIN:");
+                }
+            } else {
+                tvAuthPrompt.setText(isPersian ? "رمز مستر ۶ رقمی را وارد کنید" : "Enter your 6-digit Master PIN");
+            }
+        }
     }
 
     private void setupNumericKeypad() {
@@ -98,7 +135,7 @@ public class AuthActivity extends AppCompatActivity {
                 tempPinToConfirm = enteredPin;
                 currentPin.setLength(0);
                 updateIndicator();
-                if (tvAuthPrompt != null) tvAuthPrompt.setText("تکرار رمز ۶ رقمی برای تأیید:");
+                updateTexts();
             } else {
                 if (tempPinToConfirm.equals(enteredPin)) {
                     String hash = hashPin(enteredPin);
@@ -106,14 +143,14 @@ public class AuthActivity extends AppCompatActivity {
                             .putString(KEY_PIN_HASH, hash)
                             .putBoolean(KEY_IS_SETUP, true)
                             .apply();
-                    Toast.makeText(this, "رمز مستر با موفقیت ثبت شد", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master PIN set successfully", Toast.LENGTH_SHORT).show();
                     proceedToMain();
                 } else {
-                    Toast.makeText(this, "رمزها مطابقت ندارند، دوباره امتحان کنید", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "PINs do not match, try again", Toast.LENGTH_SHORT).show();
                     tempPinToConfirm = null;
                     currentPin.setLength(0);
                     updateIndicator();
-                    if (tvAuthPrompt != null) tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
+                    updateTexts();
                 }
             }
         } else {
@@ -123,7 +160,7 @@ public class AuthActivity extends AppCompatActivity {
             if (savedHash.equals(enteredHash)) {
                 proceedToMain();
             } else {
-                Toast.makeText(this, "رمز اشتباه است", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, isPersian ? "رمز اشتباه است" : "Incorrect PIN", Toast.LENGTH_SHORT).show();
                 currentPin.setLength(0);
                 updateIndicator();
             }
