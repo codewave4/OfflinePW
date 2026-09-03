@@ -2,8 +2,8 @@ package com.offlinepw.vault;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.os.Bundle;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
@@ -11,7 +11,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
 public class AuthActivity extends AppCompatActivity {
     private static final String PREF_NAME = "OfflinePW_Auth";
@@ -21,7 +20,7 @@ public class AuthActivity extends AppCompatActivity {
     private SharedPreferences authPrefs;
     private TextView tvAuthPrompt;
     private TextView tvPinIndicator;
-    private StringBuilder currentPin = new StringBuilder();
+    private final StringBuilder currentPin = new StringBuilder();
     private boolean isSettingUpPin = false;
     private String tempPinToConfirm = null;
 
@@ -38,10 +37,10 @@ public class AuthActivity extends AppCompatActivity {
         boolean isSetup = authPrefs.getBoolean(KEY_IS_SETUP, false);
         if (!isSetup) {
             isSettingUpPin = true;
-            tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
+            if (tvAuthPrompt != null) tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
         } else {
             isSettingUpPin = false;
-            tvAuthPrompt.setText("رمز مستر ۶ رقمی را وارد کنید");
+            if (tvAuthPrompt != null) tvAuthPrompt.setText("رمز مستر ۶ رقمی را وارد کنید");
         }
 
         setupNumericKeypad();
@@ -80,6 +79,7 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private void updateIndicator() {
+        if (tvPinIndicator == null) return;
         StringBuilder dots = new StringBuilder();
         for (int i = 0; i < currentPin.length(); i++) {
             dots.append("● ");
@@ -98,7 +98,7 @@ public class AuthActivity extends AppCompatActivity {
                 tempPinToConfirm = enteredPin;
                 currentPin.setLength(0);
                 updateIndicator();
-                tvAuthPrompt.setText("تکرار رمز ۶ رقمی برای تأیید:");
+                if (tvAuthPrompt != null) tvAuthPrompt.setText("تکرار رمز ۶ رقمی برای تأیید:");
             } else {
                 if (tempPinToConfirm.equals(enteredPin)) {
                     String hash = hashPin(enteredPin);
@@ -113,7 +113,7 @@ public class AuthActivity extends AppCompatActivity {
                     tempPinToConfirm = null;
                     currentPin.setLength(0);
                     updateIndicator();
-                    tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
+                    if (tvAuthPrompt != null) tvAuthPrompt.setText("یک رمز ۶ رقمی مستر تعیین کنید");
                 }
             }
         } else {
@@ -139,7 +139,7 @@ public class AuthActivity extends AppCompatActivity {
     private String hashPin(String pin) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest((pin + "OfflinePW_Salt_Secure").getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest((pin + "OfflinePW_Salt_2026").getBytes(StandardCharsets.UTF_8));
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
@@ -147,7 +147,7 @@ public class AuthActivity extends AppCompatActivity {
                 hexString.append(hex);
             }
             return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
+        } catch (Exception e) {
             return pin;
         }
     }
