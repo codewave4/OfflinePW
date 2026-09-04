@@ -1,165 +1,164 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#18181B">
+    android:orientation="vertical"
+    android:background="#18181B"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Edit Vault Item"
+        android:textColor="#F4F4F5"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilTitle"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:boxStrokeColor="#3B82F6"
+        app:hintTextColor="#3B82F6">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F4F4F5"
+            android:textSize="14sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilCategory"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:boxStrokeColor="#3B82F6"
+        app:hintTextColor="#3B82F6">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etCategory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F4F4F5"
+            android:textSize="14sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilUsername"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:boxStrokeColor="#3B82F6"
+        app:hintTextColor="#3B82F6">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etUsername"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F4F4F5"
+            android:textSize="14sp" />
+    </com.google.android.material.textfield.TextInputLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
 
-        <TextView
-            android:id="@+id/tvDialogTitle"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilPassword"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:passwordToggleEnabled="true"
+            app:boxStrokeColor="#3B82F6"
+            app:hintTextColor="#3B82F6">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPassword"
+                android:textColor="#F4F4F5"
+                android:textSize="14sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnGenerate"
+            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ثبت رکورد جدید"
+            android:layout_height="52dp"
+            android:layout_marginStart="8dp"
+            android:text="Generate"
+            android:textSize="12sp"
+            android:textStyle="bold"
             android:textColor="#F4F4F5"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilTitle"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:hint="عنوان (مثلاً Google یا کارت بانک)"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#F4F4F5" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilCategory"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:hint="دسته‌بندی (LOGIN, CARD, NOTE, WIFI)"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etCategory"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="LOGIN"
-                android:textColor="#F4F4F5" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilUsername"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:hint="نام کاربری یا ایمیل یا شماره کارت"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etUsername"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#F4F4F5" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="10dp"
-            android:gravity="center_vertical">
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/tilPassword"
-                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="رمز عبور"
-                android:textColorHint="#71717A"
-                app:boxStrokeColor="#A1A1AA"
-                app:passwordToggleEnabled="true"
-                app:passwordToggleTint="#A1A1AA"
-                app:hintTextColor="#F4F4F5">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/etPassword"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="textPassword"
-                    android:textColor="#F4F4F5" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnGenerate"
-                style="@style/Widget.Material3.Button.TonalButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginStart="8dp"
-                android:text="ساخت رمز"
-                android:textSize="11sp"
-                android:textColor="#E4E4E7"
-                app:backgroundTint="#27272A"
-                app:cornerRadius="10dp" />
-        </LinearLayout>
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/tilNotes"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:hint="یادداشت امن (اختیاری)"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etNotes"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#F4F4F5" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="20dp">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCancel"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:text="انصراف"
-                android:textColor="#A1A1AA" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSave"
-                android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="ذخیره امن"
-                android:textColor="#09090B"
-                app:backgroundTint="#F4F4F5"
-                app:cornerRadius="12dp" />
-        </LinearLayout>
-
+            app:backgroundTint="#27272A"
+            app:cornerRadius="12dp" />
     </LinearLayout>
-</ScrollView>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilNotes"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        app:boxStrokeColor="#3B82F6"
+        app:hintTextColor="#3B82F6">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etNotes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#F4F4F5"
+            android:textSize="14sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- دکمه‌های Cancel و Save کاملاً هم‌اندازه، متقارن و بدون بیرون‌زدگی -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCancel"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Cancel"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#F4F4F5"
+            app:backgroundTint="#27272A"
+            app:cornerRadius="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSave"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Save"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#09090B"
+            app:backgroundTint="#E4E4E7"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+
+</LinearLayout>
