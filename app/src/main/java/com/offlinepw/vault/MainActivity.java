@@ -133,32 +133,68 @@ public class MainActivity extends AppCompatActivity {
 
     private static class CryptoManager {
         private static final String KEY_ALIAS = "OfflinePW_Master_Key_v3";
-        private Context context;
+        private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
 
         public CryptoManager(Context context) {
-            this.context = context;
+            initKey();
         }
 
-        private synchronized javax.crypto.SecretKey getSecretKey() {
+        private synchronized void initKey() {
             try {
-                java.security.KeyStore keyStore = java.security.KeyStore.getInstance("AndroidKeyStore");
+                java.security.KeyStore keyStore = java.security.KeyStore.getInstance(ANDROID_KEYSTORE);
                 keyStore.load(null);
-                if (!keyStore.containsAlias(KEY_ALIAS)) {
-                    androidx.security.crypto.MasterKey masterKey = new androidx.security.crypto.MasterKey.Builder(context, KEY_ALIAS)
-                            .setKeyGenParameterSpec(new android.security.keystore.KeyGenParameterSpec.Builder(
-                                    KEY_ALIAS,
-                                    android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                                    .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-                                    .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-                                    .setKeySize(256)
-                                    .setUserAuthenticationRequired(false)
-                                    .build())
-                            .build();
+                if (keyStore.containsAlias(KEY_ALIAS)) {
+                    return;
                 }
-                return (javax.crypto.SecretKey) keyStore.getKey(KEY_ALIAS, null);
-            } catch (Exception e) {
-                return null;
+
+                boolean generated = false;
+                // ۱. تلاش برای ساخت کلید با StrongBox
+                try {
+                    javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
+                    android.security.keystore.KeyGenParameterSpec.Builder builder = new android.security.keystore.KeyGenParameterSpec.Builder(
+                            KEY_ALIAS, 3) // 3 = PURPOSE_ENCRYPT | PURPOSE_DECRYPT
+                            .setBlockModes("GCM")
+                            .setEncryptionPaddings("NoPadding")
+                            .setKeySize(256)
+                            .setUserAuthenticationRequired(false);
+
+                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        builder.setIsStrongBoxBacked(true);
+                    }
+                    kg.init(builder.build());
+                    kg.generateKey();
+                    generated = true;
+                } catch (Throwable ignored) {
+                    generated = false;
+                }
+
+                // ۲. فال‌بک در صورت عدم پشتیبانی از StrongBox به TEE سخت‌افزاری
+                if (!generated) {
+                    javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
+                    android.security.keystore.KeyGenParameterSpec.Builder builder = new android.security.keystore.KeyGenParameterSpec.Builder(
+                            KEY_ALIAS, 3)
+                            .setBlockModes("GCM")
+                            .setEncryptionPaddings("NoPadding")
+                            .setKeySize(256)
+                            .setUserAuthenticationRequired(false);
+                    kg.init(builder.build());
+                    kg.generateKey();
+                }
+            } catch (Throwable ignored) {
             }
+        }
+
+        private javax.crypto.SecretKey getSecretKey() {
+            try {
+                java.security.KeyStore keyStore = java.security.KeyStore.getInstance(ANDROID_KEYSTORE);
+                keyStore.load(null);
+                java.security.Key key = keyStore.getKey(KEY_ALIAS, null);
+                if (key instanceof javax.crypto.SecretKey) {
+                    return (javax.crypto.SecretKey) key;
+                }
+            } catch (Throwable ignored) {
+            }
+            return null;
         }
 
         public String encrypt(String plainText) {
@@ -174,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
                 System.arraycopy(iv, 0, combined, 0, iv.length);
                 System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
                 return Base64.encodeToString(combined, Base64.NO_WRAP);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 return "";
             }
         }
@@ -193,7 +229,7 @@ public class MainActivity extends AppCompatActivity {
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
                 return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 return "";
             }
         }
