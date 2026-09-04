@@ -133,52 +133,30 @@ public class MainActivity extends AppCompatActivity {
 
     private static class CryptoManager {
         private static final String KEY_ALIAS = "OfflinePW_Master_Key_v3";
-        private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
+        private Context context;
 
         public CryptoManager(Context context) {
-            getOrCreateKey();
+            this.context = context;
         }
 
-        private synchronized javax.crypto.SecretKey getOrCreateKey() {
+        private synchronized javax.crypto.SecretKey getSecretKey() {
             try {
-                java.security.KeyStore keyStore = java.security.KeyStore.getInstance(ANDROID_KEYSTORE);
+                java.security.KeyStore keyStore = java.security.KeyStore.getInstance("AndroidKeyStore");
                 keyStore.load(null);
-                if (keyStore.containsAlias(KEY_ALIAS)) {
-                    java.security.Key key = keyStore.getKey(KEY_ALIAS, null);
-                    if (key instanceof javax.crypto.SecretKey) {
-                        return (javax.crypto.SecretKey) key;
-                    }
-                }
-
-                // تلاش اول: ساخت کلید در ماژول سخت‌افزاری StrongBox
-                try {
-                    javax.crypto.KeyGenerator keyGen = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
-                    android.security.keystore.KeyGenParameterSpec spec = new android.security.keystore.KeyGenParameterSpec.Builder(
-                            KEY_ALIAS,
-                            android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                            .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-                            .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-                            .setKeySize(256)
-                            .setUserAuthenticationRequired(false)
-                            .setIsStrongBoxBacked(true)
+                if (!keyStore.containsAlias(KEY_ALIAS)) {
+                    androidx.security.crypto.MasterKey masterKey = new androidx.security.crypto.MasterKey.Builder(context, KEY_ALIAS)
+                            .setKeyGenParameterSpec(new android.security.keystore.KeyGenParameterSpec.Builder(
+                                    KEY_ALIAS,
+                                    android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
+                                    .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
+                                    .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
+                                    .setKeySize(256)
+                                    .setUserAuthenticationRequired(false)
+                                    .build())
                             .build();
-                    keyGen.init(spec);
-                    return keyGen.generateKey();
-                } catch (Throwable t) {
-                    // فال‌بک به محیط امن سخت‌افزاری استاندارد (TEE)
-                    javax.crypto.KeyGenerator keyGen = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
-                    android.security.keystore.KeyGenParameterSpec spec = new android.security.keystore.KeyGenParameterSpec.Builder(
-                            KEY_ALIAS,
-                            android.security.keystore.KeyProperties.PURPOSE_ENCRYPT | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                            .setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-                            .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-                            .setKeySize(256)
-                            .setUserAuthenticationRequired(false)
-                            .build();
-                    keyGen.init(spec);
-                    return keyGen.generateKey();
                 }
-            } catch (Throwable e) {
+                return (javax.crypto.SecretKey) keyStore.getKey(KEY_ALIAS, null);
+            } catch (Exception e) {
                 return null;
             }
         }
@@ -186,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
         public String encrypt(String plainText) {
             if (plainText == null || plainText.isEmpty()) return "";
             try {
-                javax.crypto.SecretKey key = getOrCreateKey();
+                javax.crypto.SecretKey key = getSecretKey();
                 if (key == null) return "";
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 cipher.init(Cipher.ENCRYPT_MODE, key);
@@ -196,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
                 System.arraycopy(iv, 0, combined, 0, iv.length);
                 System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
                 return Base64.encodeToString(combined, Base64.NO_WRAP);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 return "";
             }
         }
@@ -204,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
         public String decrypt(String base64) {
             if (base64 == null || base64.isEmpty()) return "";
             try {
-                javax.crypto.SecretKey key = getOrCreateKey();
+                javax.crypto.SecretKey key = getSecretKey();
                 if (key == null) return "";
                 byte[] combined = Base64.decode(base64, Base64.NO_WRAP);
                 if (combined == null || combined.length < 12) return "";
@@ -215,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
                 Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
                 return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 return "";
             }
         }
