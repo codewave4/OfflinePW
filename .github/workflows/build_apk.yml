@@ -24,24 +24,43 @@ jobs:
       with:
         gradle-version: '8.4'
 
-    # بازیابی کلید ثابت و معتبر از Secrets گیت‌هاب
+    # ۱. بازیابی کلید از سکرت
     - name: Decode Keystore from Secret
-      env:
-        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 -d > app/release.keystore
 
-    # کامپایل رسمی نسخه Release با امضای ثابت
+    # ۲. تست تشخیصی وضعیت سکرت پسورد (کاملاً امن: فقط اعلام وضعیت و طول رشته)
+    - name: Debug Secret Check
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      run: |
+        echo "=== DIAGNOSTIC CHECK ==="
+        if [ -z "$KEYSTORE_PASSWORD" ]; then
+          echo "❌ KEYSTORE_PASSWORD is EMPTY or NOT FOUND in Secrets!"
+        else
+          LEN=${#KEYSTORE_PASSWORD}
+          echo "✅ KEYSTORE_PASSWORD is PRESENT! Length: $LEN characters."
+        fi
+        echo "========================"
+
+    # ۳. بیلد نسخه رسمی Release
     - name: Build Signed Release APK
-      run: gradle assembleRelease --stacktrace --no-daemon
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: "offlinepw_key"
+      run: |
+        gradle assembleRelease \
+          -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+          -PKEY_ALIAS="offlinepw_key" \
+          --stacktrace --no-daemon
 
-    # آماده‌سازی فایل خروجی نصبی
+    # ۴. آماده‌سازی خروجی فایل نصبی
     - name: Prepare APK Output
       run: |
         mkdir -p output_apk
         cp app/build/outputs/apk/release/*.apk output_apk/OfflinePW_1.0.apk
 
-    # آپلود فایل نهایی Release برای دانلود
+    # ۵. آپلود فایل نصبی نهایی
     - name: Upload Signed Release APK
       uses: actions/upload-artifact@v4
       with:
