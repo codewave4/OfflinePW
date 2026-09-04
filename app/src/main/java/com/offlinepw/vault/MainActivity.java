@@ -12,6 +12,8 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
@@ -35,14 +37,14 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+import com.offlinepw.vault.crypto.CryptoManager;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -53,14 +55,16 @@ public class MainActivity extends AppCompatActivity {
         private String username;
         private String password;
         private String notes;
+        private String totpSecret;
 
-        public VaultItem(String id, String title, String category, String username, String password, String notes) {
+        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret) {
             this.id = id;
             this.title = title;
             this.category = category;
             this.username = username;
             this.password = password;
             this.notes = notes;
+            this.totpSecret = totpSecret;
         }
 
         public String getId() { return id; }
@@ -69,9 +73,10 @@ public class MainActivity extends AppCompatActivity {
         public String getUsername() { return username; }
         public String getPassword() { return password; }
         public String getNotes() { return notes; }
+        public String getTotpSecret() { return totpSecret; }
     }
 
-    private static class VaultDatabaseHelper extends SQLiteOpenHelper {
+    public static class VaultDatabaseHelper extends SQLiteOpenHelper {
         public static final String TABLE_ITEMS = "vault_items";
         public static final String COLUMN_ID = "id";
         public static final String COLUMN_TITLE = "title";
@@ -79,9 +84,10 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_USERNAME = "username";
         public static final String COLUMN_PASSWORD = "password";
         public static final String COLUMN_NOTES = "notes";
+        public static final String COLUMN_TOTP = "totp_secret";
 
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 1);
+            super(context, "offline_pw_vault.db", null, 2);
         }
 
         @Override
@@ -92,13 +98,17 @@ public class MainActivity extends AppCompatActivity {
                     COLUMN_CATEGORY + " TEXT, " +
                     COLUMN_USERNAME + " TEXT, " +
                     COLUMN_PASSWORD + " TEXT, " +
-                    COLUMN_NOTES + " TEXT)");
+                    COLUMN_NOTES + " TEXT, " +
+                    COLUMN_TOTP + " TEXT)");
         }
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            db.execSQL("DROP TABLE IF EXISTS " + TABLE_ITEMS);
-            onCreate(db);
+            if (oldVersion < 2) {
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_TOTP + " TEXT");
+                } catch (Exception ignored) {}
+            }
         }
 
         public void insertItem(VaultItem item, CryptoManager crypto) {
@@ -110,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
             cv.put(COLUMN_USERNAME, crypto.encrypt(item.getUsername()));
             cv.put(COLUMN_PASSWORD, crypto.encrypt(item.getPassword()));
             cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes()));
+            cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret()));
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
@@ -124,120 +135,23 @@ public class MainActivity extends AppCompatActivity {
                 String user = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_USERNAME)));
                 String pass = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_PASSWORD)));
                 String notes = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_NOTES)));
-                list.add(new VaultItem(id, title, cat, user, pass, notes));
+                String totp = "";
+                int totpIndex = c.getColumnIndex(COLUMN_TOTP);
+                if (totpIndex != -1) {
+                    totp = crypto.decrypt(c.getString(totpIndex));
+                }
+                list.add(new VaultItem(id, title, cat, user, pass, notes, totp));
             }
             c.close();
             return list;
         }
     }
 
-    private static class CryptoManager {
-        private static final String KEY_ALIAS = "OfflinePW_Master_Key_v3";
-        private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
-
-        public CryptoManager(Context context) {
-            initKey();
-        }
-
-        private synchronized void initKey() {
-            try {
-                java.security.KeyStore keyStore = java.security.KeyStore.getInstance(ANDROID_KEYSTORE);
-                keyStore.load(null);
-                if (keyStore.containsAlias(KEY_ALIAS)) {
-                    return;
-                }
-
-                boolean generated = false;
-                // ۱. تلاش برای ساخت کلید با StrongBox
-                try {
-                    javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
-                    android.security.keystore.KeyGenParameterSpec.Builder builder = new android.security.keystore.KeyGenParameterSpec.Builder(
-                            KEY_ALIAS, 3) // 3 = PURPOSE_ENCRYPT | PURPOSE_DECRYPT
-                            .setBlockModes("GCM")
-                            .setEncryptionPaddings("NoPadding")
-                            .setKeySize(256)
-                            .setUserAuthenticationRequired(false);
-
-                    if (android.os.Build.VERSION.SDK_INT >= 28) {
-                        builder.setIsStrongBoxBacked(true);
-                    }
-                    kg.init(builder.build());
-                    kg.generateKey();
-                    generated = true;
-                } catch (Throwable ignored) {
-                    generated = false;
-                }
-
-                // ۲. فال‌بک در صورت عدم پشتیبانی از StrongBox به TEE سخت‌افزاری
-                if (!generated) {
-                    javax.crypto.KeyGenerator kg = javax.crypto.KeyGenerator.getInstance("AES", ANDROID_KEYSTORE);
-                    android.security.keystore.KeyGenParameterSpec.Builder builder = new android.security.keystore.KeyGenParameterSpec.Builder(
-                            KEY_ALIAS, 3)
-                            .setBlockModes("GCM")
-                            .setEncryptionPaddings("NoPadding")
-                            .setKeySize(256)
-                            .setUserAuthenticationRequired(false);
-                    kg.init(builder.build());
-                    kg.generateKey();
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-
-        private javax.crypto.SecretKey getSecretKey() {
-            try {
-                java.security.KeyStore keyStore = java.security.KeyStore.getInstance(ANDROID_KEYSTORE);
-                keyStore.load(null);
-                java.security.Key key = keyStore.getKey(KEY_ALIAS, null);
-                if (key instanceof javax.crypto.SecretKey) {
-                    return (javax.crypto.SecretKey) key;
-                }
-            } catch (Throwable ignored) {
-            }
-            return null;
-        }
-
-        public String encrypt(String plainText) {
-            if (plainText == null || plainText.isEmpty()) return "";
-            try {
-                javax.crypto.SecretKey key = getSecretKey();
-                if (key == null) return "";
-                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.ENCRYPT_MODE, key);
-                byte[] iv = cipher.getIV();
-                byte[] encrypted = cipher.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
-                byte[] combined = new byte[iv.length + encrypted.length];
-                System.arraycopy(iv, 0, combined, 0, iv.length);
-                System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-                return Base64.encodeToString(combined, Base64.NO_WRAP);
-            } catch (Throwable e) {
-                return "";
-            }
-        }
-
-        public String decrypt(String base64) {
-            if (base64 == null || base64.isEmpty()) return "";
-            try {
-                javax.crypto.SecretKey key = getSecretKey();
-                if (key == null) return "";
-                byte[] combined = Base64.decode(base64, Base64.NO_WRAP);
-                if (combined == null || combined.length < 12) return "";
-                byte[] iv = new byte[12];
-                System.arraycopy(combined, 0, iv, 0, 12);
-                byte[] encrypted = new byte[combined.length - 12];
-                System.arraycopy(combined, 12, encrypted, 0, encrypted.length);
-                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
-                return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
-            } catch (Throwable e) {
-                return "";
-            }
-        }
-    }
-
     public interface OnItemClickListener {
         void onItemClick(VaultItem item);
     }
+
+    private final Set<String> revealedTotpItemIds = new HashSet<>();
 
     public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> {
         private List<VaultItem> fullList = new ArrayList<>();
@@ -325,8 +239,17 @@ public class MainActivity extends AppCompatActivity {
             tvMasked.setPadding(0, 6, 0, 0);
             root.addView(tvMasked);
 
+            // بخش امن TOTP به صورت پیش‌فرض مخفی با قابلیت افشا موقت با لمس
+            TextView tvTotpDisplay = new TextView(ctx);
+            tvTotpDisplay.setTextSize(13f);
+            tvTotpDisplay.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            tvTotpDisplay.setTextColor(Color.parseColor("#F59E0B"));
+            tvTotpDisplay.setPadding(0, 8, 0, 0);
+            tvTotpDisplay.setVisibility(View.GONE);
+            root.addView(tvTotpDisplay);
+
             card.addView(root);
-            return new ViewHolder(card, tvTitle, tvCategory, tvUsername, tvMasked);
+            return new ViewHolder(card, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay);
         }
 
         @Override
@@ -345,6 +268,37 @@ public class MainActivity extends AppCompatActivity {
                 holder.tvUsername.setText("•••• •••• ••••");
             }
 
+            // مدیریت نمایش امن TOTP (مخفی بودن پیش‌فرض و نمایش موقت فقط با لمس)
+            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
+                int sec = TotpGenerator.getSecondsRemaining();
+                boolean isRevealed = revealedTotpItemIds.contains(item.getId());
+
+                if (isRevealed) {
+                    String code = TotpGenerator.generateCode(item.getTotpSecret());
+                    holder.tvTotpDisplay.setText("🔑 2FA: " + code + " (" + sec + "s)");
+                } else {
+                    holder.tvTotpDisplay.setText("🔑 2FA: •••••• (" + sec + "s)");
+                }
+                holder.tvTotpDisplay.setVisibility(View.VISIBLE);
+
+                // با لمس دکمه TOTP، کد افشا شده و بلافاصله کپی می‌شود
+                holder.tvTotpDisplay.setOnClickListener(v -> {
+                    String code = TotpGenerator.generateCode(item.getTotpSecret());
+                    copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", code);
+                    revealedTotpItemIds.add(item.getId());
+                    notifyItemChanged(position);
+
+                    // مخفی‌سازی مجدد خودکار پس از ۵ ثانیه
+                    v.postDelayed(() -> {
+                        revealedTotpItemIds.remove(item.getId());
+                        notifyItemChanged(position);
+                    }, 5000);
+                });
+            } else {
+                holder.tvTotpDisplay.setVisibility(View.GONE);
+                holder.tvTotpDisplay.setOnClickListener(null);
+            }
+
             holder.card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
             holder.card.setCardBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
             holder.tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
@@ -361,15 +315,16 @@ public class MainActivity extends AppCompatActivity {
 
         public class ViewHolder extends RecyclerView.ViewHolder {
             MaterialCardView card;
-            TextView tvTitle, tvCategory, tvUsername, tvMasked;
+            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay;
 
-            public ViewHolder(@NonNull View itemView, TextView t, TextView c, TextView u, TextView m) {
+            public ViewHolder(@NonNull View itemView, TextView t, TextView c, TextView u, TextView m, TextView totp) {
                 super(itemView);
                 card = (MaterialCardView) itemView;
                 tvTitle = t;
                 tvCategory = c;
                 tvUsername = u;
                 tvMasked = m;
+                tvTotpDisplay = totp;
             }
         }
     }
@@ -389,6 +344,17 @@ public class MainActivity extends AppCompatActivity {
     private boolean isDarkMode = true;
     private boolean isPersian = false;
     private SharedPreferences prefs;
+
+    private Handler totpHandler = new Handler(Looper.getMainLooper());
+    private Runnable totpRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
+            totpHandler.postDelayed(this, 1000);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -456,6 +422,18 @@ public class MainActivity extends AppCompatActivity {
         updateLanguageUI();
         updateThemeUI();
         loadVaultData();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        totpHandler.post(totpRunnable);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        totpHandler.removeCallbacks(totpRunnable);
     }
 
     @Override
@@ -547,12 +525,14 @@ public class MainActivity extends AppCompatActivity {
         TextInputLayout tilCategory = dialogView.findViewById(R.id.tilCategory);
         TextInputLayout tilUsername = dialogView.findViewById(R.id.tilUsername);
         TextInputLayout tilPassword = dialogView.findViewById(R.id.tilPassword);
+        TextInputLayout tilTotpSecret = dialogView.findViewById(R.id.tilTotpSecret);
         TextInputLayout tilNotes = dialogView.findViewById(R.id.tilNotes);
 
         TextInputEditText etTitle = dialogView.findViewById(R.id.etTitle);
         TextInputEditText etCategory = dialogView.findViewById(R.id.etCategory);
         TextInputEditText etUsername = dialogView.findViewById(R.id.etUsername);
         TextInputEditText etPassword = dialogView.findViewById(R.id.etPassword);
+        TextInputEditText etTotpSecret = dialogView.findViewById(R.id.etTotpSecret);
         TextInputEditText etNotes = dialogView.findViewById(R.id.etNotes);
 
         MaterialButton btnGenerate = dialogView.findViewById(R.id.btnGenerate);
@@ -565,6 +545,7 @@ public class MainActivity extends AppCompatActivity {
             tilCategory.setHint("دسته‌بندی (LOGIN, CARD, NOTE, WIFI)");
             tilUsername.setHint("نام کاربری یا ایمیل یا شماره کارت");
             tilPassword.setHint("رمز عبور");
+            if (tilTotpSecret != null) tilTotpSecret.setHint("کلید TOTP دو‌مرحله‌ای (اختیاری، Base32)");
             tilNotes.setHint("یادداشت امن (اختیاری)");
             btnGenerate.setText("ساخت رمز");
             btnCancel.setText("انصراف");
@@ -575,6 +556,7 @@ public class MainActivity extends AppCompatActivity {
             tilCategory.setHint("Category (LOGIN, CARD, NOTE, WIFI)");
             tilUsername.setHint("Username / Email / Card Number");
             tilPassword.setHint("Password");
+            if (tilTotpSecret != null) tilTotpSecret.setHint("2FA TOTP Secret Key (Optional, Base32)");
             tilNotes.setHint("Secure Notes (Optional)");
             btnGenerate.setText("Generate");
             btnCancel.setText("Cancel");
@@ -589,6 +571,7 @@ public class MainActivity extends AppCompatActivity {
             etCategory.setText(existingItem.getCategory());
             etUsername.setText(existingItem.getUsername());
             etPassword.setText(existingItem.getPassword());
+            if (etTotpSecret != null) etTotpSecret.setText(existingItem.getTotpSecret());
             etNotes.setText(existingItem.getNotes());
         }
 
@@ -604,6 +587,7 @@ public class MainActivity extends AppCompatActivity {
             String category = etCategory.getText() != null ? etCategory.getText().toString().trim() : "LOGIN";
             String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
             String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+            String totp = (etTotpSecret != null && etTotpSecret.getText() != null) ? etTotpSecret.getText().toString().trim() : "";
             String notes = etNotes.getText() != null ? etNotes.getText().toString().trim() : "";
 
             if (title.isEmpty() || password.isEmpty()) {
@@ -612,7 +596,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             String id = existingItem != null ? existingItem.getId() : UUID.randomUUID().toString();
-            VaultItem item = new VaultItem(id, title, category, username, password, notes);
+            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp);
             dbHelper.insertItem(item, cryptoManager);
             loadVaultData();
             dialog.dismiss();
@@ -623,22 +607,45 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showEditOrDeleteDialog(VaultItem item) {
-        String[] options = isPersian ?
-                new String[]{"ویرایش", "کپی نام کاربری / شماره", "کپی رمز عبور", "کپی یادداشت", "حذف"} :
-                new String[]{"Edit", "Copy Username / Card", "Copy Password", "Copy Notes", "Delete"};
+        List<String> optionsList = new ArrayList<>();
+        if (isPersian) {
+            optionsList.add("ویرایش");
+            optionsList.add("کپی نام کاربری / شماره");
+            optionsList.add("کپی رمز عبور");
+            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
+                optionsList.add("کپی کد یکبارمصرف (TOTP)");
+            }
+            optionsList.add("کپی یادداشت");
+            optionsList.add("حذف");
+        } else {
+            optionsList.add("Edit");
+            optionsList.add("Copy Username / Card");
+            optionsList.add("Copy Password");
+            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
+                optionsList.add("Copy 2FA (TOTP) Code");
+            }
+            optionsList.add("Copy Notes");
+            optionsList.add("Delete");
+        }
+
+        String[] options = optionsList.toArray(new String[0]);
 
         new AlertDialog.Builder(this)
                 .setTitle(item.getTitle())
                 .setItems(options, (dialog, which) -> {
-                    if (which == 0) {
+                    String selected = options[which];
+                    if (selected.equals("ویرایش") || selected.equals("Edit")) {
                         showAddDialog(item);
-                    } else if (which == 1) {
+                    } else if (selected.equals("کپی نام کاربری / شماره") || selected.equals("Copy Username / Card")) {
                         copyToClipboard(isPersian ? "نام کاربری / شماره" : "Username / Card", item.getUsername());
-                    } else if (which == 2) {
+                    } else if (selected.equals("کپی رمز عبور") || selected.equals("Copy Password")) {
                         copyToClipboard(isPersian ? "رمز عبور" : "Password", item.getPassword());
-                    } else if (which == 3) {
+                    } else if (selected.equals("کپی کد یکبارمصرف (TOTP)") || selected.equals("Copy 2FA (TOTP) Code")) {
+                        String currentOtp = TotpGenerator.generateCode(item.getTotpSecret());
+                        copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentOtp);
+                    } else if (selected.equals("کپی یادداشت") || selected.equals("Copy Notes")) {
                         copyToClipboard(isPersian ? "یادداشت" : "Notes", item.getNotes());
-                    } else if (which == 4) {
+                    } else if (selected.equals("حذف") || selected.equals("Delete")) {
                         dbHelper.getWritableDatabase().delete(VaultDatabaseHelper.TABLE_ITEMS, VaultDatabaseHelper.COLUMN_ID + "=?", new String[]{item.getId()});
                         loadVaultData();
                         Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
