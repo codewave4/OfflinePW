@@ -17,9 +17,10 @@ android {
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            storePassword "OfflinePW_Secure_2026"
-            keyAlias "offlinepw_key"
-            keyPassword "OfflinePW_Secure_2026"
+            // خواندن امن پسورد از Secrets گیت‌هاب بدون افشای عمومی
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS") ?: "offlinepw_key"
+            keyPassword System.getenv("KEYSTORE_PASSWORD")
             v1SigningEnabled true
             v2SigningEnabled true
         }
