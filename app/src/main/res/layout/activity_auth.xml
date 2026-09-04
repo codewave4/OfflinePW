@@ -50,7 +50,7 @@
         android:id="@+id/tvAuthPrompt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="رمز مستر ۶ رقمی را وارد کنید"
+        android:text="Enter your 8-digit Master PIN"
         android:textColor="#A1A1AA"
         android:textSize="15sp"
         android:layout_marginBottom="16dp" />
@@ -60,7 +60,7 @@
         android:id="@+id/tvAuthWarning"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است."
+        android:text="Your master PIN is never stored; therefore, if forgotten, recovery is mathematically impossible."
         android:textColor="#EF4444"
         android:textSize="12sp"
         android:gravity="center"
@@ -68,17 +68,18 @@
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="24dp" />
 
+    <!-- نشانگر پین با ۸ دایره -->
     <TextView
         android:id="@+id/tvPinIndicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="○ ○ ○ ○ ○ ○"
+        android:text="○ ○ ○ ○ ○ ○ ○ ○"
         android:textColor="#3B82F6"
-        android:textSize="26sp"
-        android:letterSpacing="0.2"
+        android:textSize="24sp"
+        android:letterSpacing="0.15"
         android:layout_marginBottom="28dp" />
 
-    <!-- کیپد عددی با رنگ خنثی نوردیک و بدون رنگ صورتی -->
+    <!-- کیپد عددی -->
     <GridLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
