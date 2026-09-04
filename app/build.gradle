@@ -17,10 +17,10 @@ android {
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            // خواندن امن پسورد از Secrets گیت‌هاب بدون افشای عمومی
-            storePassword System.getenv("KEYSTORE_PASSWORD")
-            keyAlias System.getenv("KEY_ALIAS") ?: "offlinepw_key"
-            keyPassword System.getenv("KEYSTORE_PASSWORD")
+            // خواندن صرفاً از متغیرهای امن سکرت گیت‌هاب بدون هاردکد
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "offlinepw_key"
+            keyPassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
             v1SigningEnabled true
             v2SigningEnabled true
         }
