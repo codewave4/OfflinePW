@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 public class AuthActivity extends AppCompatActivity {
+    private static final int PIN_LENGTH = 8;
     private static final String PREF_AUTH = "OfflinePW_Auth";
     private static final String PREF_SETTINGS = "OfflinePW_Prefs";
     private static final String KEY_PIN_HASH = "master_pin_hash";
@@ -27,7 +28,7 @@ public class AuthActivity extends AppCompatActivity {
     private final StringBuilder currentPin = new StringBuilder();
     private boolean isSettingUpPin = false;
     private String tempPinToConfirm = null;
-    private boolean isPersian = true;
+    private boolean isPersian = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,7 +38,7 @@ public class AuthActivity extends AppCompatActivity {
 
         authPrefs = getSharedPreferences(PREF_AUTH, MODE_PRIVATE);
         settingsPrefs = getSharedPreferences(PREF_SETTINGS, MODE_PRIVATE);
-        isPersian = settingsPrefs.getBoolean("is_persian", true);
+        isPersian = settingsPrefs.getBoolean("is_persian", false);
 
         tvAuthPrompt = findViewById(R.id.tvAuthPrompt);
         tvAuthWarning = findViewById(R.id.tvAuthWarning);
@@ -73,12 +74,12 @@ public class AuthActivity extends AppCompatActivity {
         if (tvAuthPrompt != null) {
             if (isSettingUpPin) {
                 if (tempPinToConfirm == null) {
-                    tvAuthPrompt.setText(isPersian ? "یک رمز ۶ رقمی مستر تعیین کنید" : "Create a 6-digit Master PIN");
+                    tvAuthPrompt.setText(isPersian ? "یک رمز ۸ رقمی مستر تعیین کنید" : "Create an 8-digit Master PIN");
                 } else {
-                    tvAuthPrompt.setText(isPersian ? "تکرار رمز ۶ رقمی برای تأیید:" : "Confirm your 6-digit Master PIN:");
+                    tvAuthPrompt.setText(isPersian ? "تکرار رمز ۸ رقمی برای تأیید:" : "Confirm your 8-digit Master PIN:");
                 }
             } else {
-                tvAuthPrompt.setText(isPersian ? "رمز مستر ۶ رقمی را وارد کنید" : "Enter your 6-digit Master PIN");
+                tvAuthPrompt.setText(isPersian ? "رمز مستر ۸ رقمی را وارد کنید" : "Enter your 8-digit Master PIN");
             }
         }
     }
@@ -93,10 +94,10 @@ public class AuthActivity extends AppCompatActivity {
             Button btn = findViewById(id);
             if (btn != null) {
                 btn.setOnClickListener(v -> {
-                    if (currentPin.length() < 6) {
+                    if (currentPin.length() < PIN_LENGTH) {
                         currentPin.append(btn.getText().toString());
                         updateIndicator();
-                        if (currentPin.length() == 6) {
+                        if (currentPin.length() == PIN_LENGTH) {
                             handlePinComplete();
                         }
                     }
@@ -121,7 +122,7 @@ public class AuthActivity extends AppCompatActivity {
         for (int i = 0; i < currentPin.length(); i++) {
             dots.append("● ");
         }
-        for (int i = currentPin.length(); i < 6; i++) {
+        for (int i = currentPin.length(); i < PIN_LENGTH; i++) {
             dots.append("○ ");
         }
         tvPinIndicator.setText(dots.toString().trim());
