@@ -24,26 +24,24 @@ jobs:
       with:
         gradle-version: '8.4'
 
-    - name: Generate Release Keystore
+    # بازیابی کلید ثابت و معتبر از Secrets گیت‌هاب
+    - name: Decode Keystore from Secret
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
       run: |
-        keytool -genkeypair -v \
-          -keystore app/release.keystore \
-          -alias offlinepw_key \
-          -keyalg RSA \
-          -keysize 2048 \
-          -validity 10000 \
-          -storepass "OfflinePW_Secure_2026" \
-          -keypass "OfflinePW_Secure_2026" \
-          -dname "CN=OfflinePW, OU=Security, O=CodeWave, L=Tehran, ST=Tehran, C=IR"
+        echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
 
+    # کامپایل رسمی نسخه Release با امضای ثابت
     - name: Build Signed Release APK
       run: gradle assembleRelease --stacktrace --no-daemon
 
+    # آماده‌سازی فایل خروجی نصبی
     - name: Prepare APK Output
       run: |
         mkdir -p output_apk
         cp app/build/outputs/apk/release/*.apk output_apk/OfflinePW_1.0.apk
 
+    # آپلود فایل نهایی Release برای دانلود
     - name: Upload Signed Release APK
       uses: actions/upload-artifact@v4
       with:
