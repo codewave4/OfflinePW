@@ -494,6 +494,7 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton btnCancel = dialogView.findViewById(R.id.btnCancel);
         MaterialButton btnSave = dialogView.findViewById(R.id.btnSave);
 
+        // تنظیم کلمات و سایز یکسان برای هر دو دکمه بدون کلمه Securely
         if (isPersian) {
             tvDialogTitle.setText(existingItem != null ? "ویرایش رکورد" : "ثبت رکورد جدید");
             tilTitle.setHint("عنوان (مثلاً Google یا کارت بانک)");
@@ -503,7 +504,7 @@ public class MainActivity extends AppCompatActivity {
             tilNotes.setHint("یادداشت امن (اختیاری)");
             btnGenerate.setText("ساخت رمز");
             btnCancel.setText("انصراف");
-            btnSave.setText("ذخیره امن");
+            btnSave.setText("ذخیره");
         } else {
             tvDialogTitle.setText(existingItem != null ? "Edit Vault Item" : "New Vault Item");
             tilTitle.setHint("Title (e.g. Google, Bank Card)");
@@ -513,8 +514,11 @@ public class MainActivity extends AppCompatActivity {
             tilNotes.setHint("Secure Notes (Optional)");
             btnGenerate.setText("Generate");
             btnCancel.setText("Cancel");
-            btnSave.setText("Save Securely");
+            btnSave.setText("Save");
         }
+
+        btnCancel.setTextSize(14f);
+        btnSave.setTextSize(14f);
 
         if (existingItem != null) {
             etTitle.setText(existingItem.getTitle());
