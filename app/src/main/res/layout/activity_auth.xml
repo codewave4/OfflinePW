@@ -68,13 +68,13 @@
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="24dp" />
 
-    <!-- نشانگر پین با ۸ دایره -->
+    <!-- نشانگر پین با رنگ سفید اضافه شده -->
     <TextView
         android:id="@+id/tvPinIndicator"
+        android:textColor="#FFFFFF"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="○ ○ ○ ○ ○ ○ ○ ○"
-        android:textColor="#3B82F6"
         android:textSize="24sp"
         android:letterSpacing="0.15"
         android:layout_marginBottom="28dp" />
