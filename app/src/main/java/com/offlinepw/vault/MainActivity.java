@@ -488,29 +488,84 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAboutSecurityDialog() {
-        String title = isPersian ? "معماری امنیت و حریم خصوصی" : "Security & Privacy Architecture";
-        String message = isPersian ?
-                "🔐 مشخصات امنیتی OfflinePW:\n\n" +
-                "۱. رمزنگاری کامل (Zero-Knowledge Local):\n" +
-                "تمام فیلدها با AES-256-GCM رمزنگاری می‌شوند.\n\n" +
-                "۲. امنیت سخت‌افزاری (Hardware Keystore):\n" +
-                "کلید در ماژول امنیتی دستگاه نگهداری می‌شود.\n\n" +
-                "۳. بدون اینترنت (Air-Gapped):\n" +
-                "برنامه هیچ مجوزی برای اتصال به اینترنت ندارد.\n\n" +
-                "۴. ضد اسکرین‌شات (FLAG_SECURE):\n" +
-                "جلوگیری از ضبط یا تصویربرداری از رمزها."
-                :
-                "🔐 OfflinePW Security Architecture:\n\n" +
-                "1. Full Zero-Knowledge Local AES-256-GCM Encryption.\n" +
-                "2. Hardware-Backed Keystore / TEE Protection.\n" +
-                "3. Air-Gapped / Zero Internet Permissions.\n" +
-                "4. Anti-Screen Scraping (FLAG_SECURE).";
+        BottomSheetDialog sheet = new BottomSheetDialog(this);
 
-        new AlertDialog.Builder(this)
-                .setTitle(title)
-                .setMessage(message)
-                .setPositiveButton(isPersian ? "تأیید" : "Close", (dialog, which) -> dialog.dismiss())
-                .show();
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(48, 40, 48, 48);
+        root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+
+        TextView tvHeaderTitle = new TextView(this);
+        tvHeaderTitle.setText(isPersian ? "معماری امنیت و حریم خصوصی" : "Security & Privacy Architecture");
+        tvHeaderTitle.setTextSize(19f);
+        tvHeaderTitle.setTypeface(null, Typeface.BOLD);
+        tvHeaderTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        root.addView(tvHeaderTitle);
+
+        View divider = new View(this);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2);
+        dividerLp.topMargin = 16;
+        dividerLp.bottomMargin = 4;
+        divider.setLayoutParams(dividerLp);
+        divider.setBackgroundColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
+        root.addView(divider);
+
+        String[][] itemsFa = {
+            {"رمزنگاری کامل دادهها", "تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) با AES-256-GCM رمزنگاری میشوند و بهصورت رمزشده در دستگاه ذخیره میگردند."},
+            {"کلید سختافزاری دستگاه", "کلید اصلی رمزنگاری در ماژول امنیتی سختافزار گوشی (StrongBox یا TEE) ساخته و نگهداری میشود و هرگز بهصورت متن ساده در برنامه ذخیره نمیشود."},
+            {"رمز مستر مقاوم در برابر حدسزنی", "رمز مستر ۸ رقمی با الگوریتم PBKDF2 و صد و بیست هزار تکرار به همراه یک salt تصادفی و منحصربهفرد برای هر نصب، هش میشود. خود رمز هرگز ذخیره نمیشود."},
+            {"محدودیت تلاشهای ناموفق", "پس از پنج بار وارد کردن رمز اشتباه، برنامه به مدت پنج دقیقه قفل میشود تا از حدسزنی خودکار رمز جلوگیری شود."},
+            {"بدون اتصال اینترنت", "برنامه هیچ مجوز اتصال به اینترنت ندارد؛ هیچ دادهای هرگز از دستگاه شما خارج نمیشود."},
+            {"محافظت در برابر اسکرینشات", "با فعالسازی FLAG_SECURE، امکان اسکرینشات یا ضبط صفحه در تمام صفحات حساس برنامه غیرفعال است."}
+        };
+
+        String[][] itemsEn = {
+            {"Full Data Encryption", "All sensitive fields (passwords, TOTP secrets, notes) are encrypted with AES-256-GCM and stored encrypted on your device."},
+            {"Hardware-Backed Key", "The master encryption key is generated and held inside your device's secure hardware module (StrongBox or TEE) and is never stored as plain text in the app."},
+            {"Brute-Force Resistant Master PIN", "Your 8-digit master PIN is hashed using PBKDF2 with 120,000 iterations and a unique random salt per installation. The PIN itself is never stored."},
+            {"Failed Attempt Lockout", "After five incorrect PIN attempts, the app locks for five minutes to prevent automated guessing."},
+            {"Zero Internet Access", "The app requests no internet permission whatsoever; no data ever leaves your device."},
+            {"Screenshot Protection", "FLAG_SECURE is enabled across all sensitive screens, blocking screenshots and screen recording."}
+        };
+
+        String[][] items = isPersian ? itemsFa : itemsEn;
+
+        for (String[] entry : items) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, 20, 0, 0);
+
+            TextView tvItemTitle = new TextView(this);
+            tvItemTitle.setText(entry[0]);
+            tvItemTitle.setTextSize(14f);
+            tvItemTitle.setTypeface(null, Typeface.BOLD);
+            tvItemTitle.setTextColor(Color.parseColor("#3B82F6"));
+            row.addView(tvItemTitle);
+
+            TextView tvItemDesc = new TextView(this);
+            tvItemDesc.setText(entry[1]);
+            tvItemDesc.setTextSize(13f);
+            tvItemDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+            LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            descLp.topMargin = 4;
+            tvItemDesc.setLayoutParams(descLp);
+            row.addView(tvItemDesc);
+
+            root.addView(row);
+        }
+
+        MaterialButton btnClose = new MaterialButton(this);
+        btnClose.setText(isPersian ? "تأیید" : "Close");
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        closeLp.topMargin = 32;
+        btnClose.setLayoutParams(closeLp);
+        btnClose.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
+        btnClose.setTextColor(Color.parseColor("#F4F4F5"));
+        btnClose.setOnClickListener(v -> sheet.dismiss());
+        root.addView(btnClose);
+
+        sheet.setContentView(root);
+        sheet.show();
     }
 
     private void showAddDialog(VaultItem existingItem) {
