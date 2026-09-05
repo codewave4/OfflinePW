@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -23,6 +24,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -32,6 +34,7 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.appbar.AppBarLayout;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -239,7 +242,6 @@ public class MainActivity extends AppCompatActivity {
             tvMasked.setPadding(0, 6, 0, 0);
             root.addView(tvMasked);
 
-            // بخش امن TOTP به صورت پیش‌فرض مخفی با قابلیت افشا موقت با لمس
             TextView tvTotpDisplay = new TextView(ctx);
             tvTotpDisplay.setTextSize(13f);
             tvTotpDisplay.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
@@ -268,7 +270,6 @@ public class MainActivity extends AppCompatActivity {
                 holder.tvUsername.setText("•••• •••• ••••");
             }
 
-            // مدیریت نمایش امن TOTP (مخفی بودن پیش‌فرض و نمایش موقت فقط با لمس)
             if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
                 int sec = TotpGenerator.getSecondsRemaining();
                 boolean isRevealed = revealedTotpItemIds.contains(item.getId());
@@ -281,14 +282,12 @@ public class MainActivity extends AppCompatActivity {
                 }
                 holder.tvTotpDisplay.setVisibility(View.VISIBLE);
 
-                // با لمس دکمه TOTP، کد افشا شده و بلافاصله کپی می‌شود
                 holder.tvTotpDisplay.setOnClickListener(v -> {
                     String code = TotpGenerator.generateCode(item.getTotpSecret());
                     copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", code);
                     revealedTotpItemIds.add(item.getId());
                     notifyItemChanged(position);
 
-                    // مخفی‌سازی مجدد خودکار پس از ۵ ثانیه
                     v.postDelayed(() -> {
                         revealedTotpItemIds.remove(item.getId());
                         notifyItemChanged(position);
@@ -607,50 +606,177 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showEditOrDeleteDialog(VaultItem item) {
-        List<String> optionsList = new ArrayList<>();
-        if (isPersian) {
-            optionsList.add("ویرایش");
-            optionsList.add("کپی نام کاربری / شماره");
-            optionsList.add("کپی رمز عبور");
-            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
-                optionsList.add("کپی کد یکبارمصرف (TOTP)");
-            }
-            optionsList.add("کپی یادداشت");
-            optionsList.add("حذف");
-        } else {
-            optionsList.add("Edit");
-            optionsList.add("Copy Username / Card");
-            optionsList.add("Copy Password");
-            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
-                optionsList.add("Copy 2FA (TOTP) Code");
-            }
-            optionsList.add("Copy Notes");
-            optionsList.add("Delete");
+        BottomSheetDialog sheet = new BottomSheetDialog(this);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(48, 40, 48, 48);
+        root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, 20);
+
+        TextView tvHeaderTitle = new TextView(this);
+        tvHeaderTitle.setText(item.getTitle());
+        tvHeaderTitle.setTextSize(19f);
+        tvHeaderTitle.setTypeface(null, Typeface.BOLD);
+        tvHeaderTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        LinearLayout.LayoutParams headerTitleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(tvHeaderTitle, headerTitleLp);
+
+        TextView tvCategoryBadge = new TextView(this);
+        String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
+        tvCategoryBadge.setText(cat);
+        tvCategoryBadge.setTextSize(11f);
+        tvCategoryBadge.setTypeface(null, Typeface.BOLD);
+        tvCategoryBadge.setTextColor(Color.parseColor("#3B82F6"));
+        tvCategoryBadge.setBackgroundColor(Color.parseColor(isDarkMode ? "#1E293B" : "#EFF6FF"));
+        tvCategoryBadge.setPadding(20, 8, 20, 8);
+        header.addView(tvCategoryBadge);
+        root.addView(header);
+
+        View divider = new View(this);
+        divider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2));
+        divider.setBackgroundColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
+        root.addView(divider);
+
+        if (item.getUsername() != null && !item.getUsername().isEmpty()) {
+            root.addView(buildFieldRow(isPersian ? "نام کاربری / شماره" : "Username / Card", item.getUsername(), false));
+        }
+        if (item.getPassword() != null && !item.getPassword().isEmpty()) {
+            root.addView(buildFieldRow(isPersian ? "رمز عبور" : "Password", item.getPassword(), true));
+        }
+        if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
+            root.addView(buildTotpFieldRow(item));
+        }
+        if (item.getNotes() != null && !item.getNotes().isEmpty()) {
+            root.addView(buildFieldRow(isPersian ? "یادداشت" : "Notes", item.getNotes(), false));
         }
 
-        String[] options = optionsList.toArray(new String[0]);
+        LinearLayout actionsRow = new LinearLayout(this);
+        actionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionsRow.setPadding(0, 32, 0, 0);
 
-        new AlertDialog.Builder(this)
-                .setTitle(item.getTitle())
-                .setItems(options, (dialog, which) -> {
-                    String selected = options[which];
-                    if (selected.equals("ویرایش") || selected.equals("Edit")) {
-                        showAddDialog(item);
-                    } else if (selected.equals("کپی نام کاربری / شماره") || selected.equals("Copy Username / Card")) {
-                        copyToClipboard(isPersian ? "نام کاربری / شماره" : "Username / Card", item.getUsername());
-                    } else if (selected.equals("کپی رمز عبور") || selected.equals("Copy Password")) {
-                        copyToClipboard(isPersian ? "رمز عبور" : "Password", item.getPassword());
-                    } else if (selected.equals("کپی کد یکبارمصرف (TOTP)") || selected.equals("Copy 2FA (TOTP) Code")) {
-                        String currentOtp = TotpGenerator.generateCode(item.getTotpSecret());
-                        copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentOtp);
-                    } else if (selected.equals("کپی یادداشت") || selected.equals("Copy Notes")) {
-                        copyToClipboard(isPersian ? "یادداشت" : "Notes", item.getNotes());
-                    } else if (selected.equals("حذف") || selected.equals("Delete")) {
-                        dbHelper.getWritableDatabase().delete(VaultDatabaseHelper.TABLE_ITEMS, VaultDatabaseHelper.COLUMN_ID + "=?", new String[]{item.getId()});
-                        loadVaultData();
-                        Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
-                    }
-                }).show();
+        MaterialButton btnEdit = new MaterialButton(this);
+        btnEdit.setText(isPersian ? "ویرایش" : "Edit");
+        LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        editLp.setMarginEnd(12);
+        btnEdit.setLayoutParams(editLp);
+        btnEdit.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
+        btnEdit.setTextColor(Color.parseColor("#F4F4F5"));
+        btnEdit.setOnClickListener(v -> { sheet.dismiss(); showAddDialog(item); });
+        actionsRow.addView(btnEdit);
+
+        MaterialButton btnDelete = new MaterialButton(this);
+        btnDelete.setText(isPersian ? "حذف" : "Delete");
+        LinearLayout.LayoutParams deleteLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnDelete.setLayoutParams(deleteLp);
+        btnDelete.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#7F1D1D")));
+        btnDelete.setTextColor(Color.parseColor("#FEE2E2"));
+        btnDelete.setOnClickListener(v -> {
+            sheet.dismiss();
+            dbHelper.getWritableDatabase().delete(VaultDatabaseHelper.TABLE_ITEMS, VaultDatabaseHelper.COLUMN_ID + "=?", new String[]{item.getId()});
+            loadVaultData();
+            Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
+        });
+        actionsRow.addView(btnDelete);
+
+        root.addView(actionsRow);
+        sheet.setContentView(root);
+        sheet.show();
+    }
+
+    private LinearLayout buildFieldRow(String label, String value, boolean sensitive) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, 24, 0, 0);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(12f);
+        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
+        row.addView(tvLabel);
+
+        LinearLayout valueRow = new LinearLayout(this);
+        valueRow.setOrientation(LinearLayout.HORIZONTAL);
+        valueRow.setGravity(Gravity.CENTER_VERTICAL);
+        valueRow.setPadding(0, 6, 0, 0);
+
+        TextView tvValue = new TextView(this);
+        tvValue.setTextSize(15f);
+        tvValue.setTypeface(sensitive ? Typeface.MONOSPACE : Typeface.DEFAULT);
+        tvValue.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        final boolean[] revealed = {!sensitive};
+        Runnable updateText = () -> tvValue.setText(revealed[0] ? value : "••••••••••••");
+        updateText.run();
+
+        LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        valueRow.addView(tvValue, valueLp);
+
+        int iconColor = Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A");
+
+        if (sensitive) {
+            ImageView ivEye = new ImageView(this);
+            ivEye.setImageResource(R.drawable.ic_visibility_off);
+            ivEye.setColorFilter(iconColor);
+            LinearLayout.LayoutParams eyeLp = new LinearLayout.LayoutParams(56, 56);
+            eyeLp.setMarginStart(16);
+            ivEye.setLayoutParams(eyeLp);
+            ivEye.setOnClickListener(v -> {
+                revealed[0] = !revealed[0];
+                updateText.run();
+                ivEye.setImageResource(revealed[0] ? R.drawable.ic_visibility : R.drawable.ic_visibility_off);
+            });
+            valueRow.addView(ivEye);
+        }
+
+        ImageView ivCopy = new ImageView(this);
+        ivCopy.setImageResource(R.drawable.ic_content_copy);
+        ivCopy.setColorFilter(iconColor);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(56, 56);
+        copyLp.setMarginStart(16);
+        ivCopy.setLayoutParams(copyLp);
+        ivCopy.setOnClickListener(v -> copyToClipboard(label, value));
+        valueRow.addView(ivCopy);
+
+        row.addView(valueRow);
+        return row;
+    }
+
+    private LinearLayout buildTotpFieldRow(VaultItem item) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, 24, 0, 0);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(isPersian ? "کد یکبارمصرف (TOTP)" : "2FA Code (TOTP)");
+        tvLabel.setTextSize(12f);
+        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
+        row.addView(tvLabel);
+
+        LinearLayout valueRow = new LinearLayout(this);
+        valueRow.setOrientation(LinearLayout.HORIZONTAL);
+        valueRow.setGravity(Gravity.CENTER_VERTICAL);
+        valueRow.setPadding(0, 6, 0, 0);
+
+        TextView tvValue = new TextView(this);
+        tvValue.setTextSize(16f);
+        tvValue.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvValue.setTextColor(Color.parseColor("#F59E0B"));
+        tvValue.setText("••••••");
+        tvValue.setOnClickListener(v -> {
+            String code = TotpGenerator.generateCode(item.getTotpSecret());
+            tvValue.setText(code);
+            copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", code);
+            tvValue.postDelayed(() -> tvValue.setText("••••••"), 5000);
+        });
+
+        LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        valueRow.addView(tvValue, valueLp);
+        row.addView(valueRow);
+        return row;
     }
 
     private void copyToClipboard(String label, String text) {
