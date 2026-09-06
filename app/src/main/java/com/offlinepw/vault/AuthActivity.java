@@ -7,11 +7,13 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 import android.view.WindowManager;
-import android.widget.Button;
+import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -21,7 +23,7 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
 public class AuthActivity extends AppCompatActivity {
-    private static final int PIN_LENGTH = 8;
+    private static final int MIN_PASSWORD_LENGTH = 6;
     private static final String PREF_AUTH = "OfflinePW_Auth";
     private static final String PREF_SETTINGS = "OfflinePW_Prefs";
     private static final String KEY_PIN_HASH = "master_pin_hash";
@@ -40,11 +42,13 @@ public class AuthActivity extends AppCompatActivity {
     private SharedPreferences settingsPrefs;
     private TextView tvAuthPrompt;
     private TextView tvAuthWarning;
-    private TextView tvPinIndicator;
+    private TextView tvLockoutTimer;
+    private TextInputLayout tilMasterPassword;
+    private TextInputEditText etMasterPassword;
+    private MaterialButton btnUnlock;
     private MaterialButton btnAuthLang;
-    private final StringBuilder currentPin = new StringBuilder();
     private boolean isSettingUpPin = false;
-    private String tempPinToConfirm = null;
+    private String tempPasswordToConfirm = null;
     private boolean isPersian = false;
 
     private final Handler lockoutHandler = new Handler(Looper.getMainLooper());
@@ -62,7 +66,10 @@ public class AuthActivity extends AppCompatActivity {
 
         tvAuthPrompt = findViewById(R.id.tvAuthPrompt);
         tvAuthWarning = findViewById(R.id.tvAuthWarning);
-        tvPinIndicator = findViewById(R.id.tvPinIndicator);
+        tvLockoutTimer = findViewById(R.id.tvLockoutTimer);
+        tilMasterPassword = findViewById(R.id.tilMasterPassword);
+        etMasterPassword = findViewById(R.id.etMasterPassword);
+        btnUnlock = findViewById(R.id.btnUnlock);
         btnAuthLang = findViewById(R.id.btnAuthLang);
 
         boolean isSetup = authPrefs.getBoolean(KEY_IS_SETUP, false);
@@ -76,8 +83,21 @@ public class AuthActivity extends AppCompatActivity {
             });
         }
 
+        if (btnUnlock != null) {
+            btnUnlock.setOnClickListener(v -> attemptSubmit());
+        }
+
+        if (etMasterPassword != null) {
+            etMasterPassword.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    attemptSubmit();
+                    return true;
+                }
+                return false;
+            });
+        }
+
         updateTexts();
-        setupNumericKeypad();
         checkLockoutState();
     }
 
@@ -89,85 +109,50 @@ public class AuthActivity extends AppCompatActivity {
         if (tvAuthWarning != null) {
             tvAuthWarning.setText(isPersian ?
                     "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است." :
-                    "Your master PIN is never stored; therefore, if forgotten, recovery is mathematically impossible.");
+                    "Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible.");
         }
 
         if (tvAuthPrompt != null) {
             if (isSettingUpPin) {
-                if (tempPinToConfirm == null) {
-                    tvAuthPrompt.setText(isPersian ? "یک رمز ۸ رقمی مستر تعیین کنید" : "Create an 8-digit Master PIN");
+                if (tempPasswordToConfirm == null) {
+                    tvAuthPrompt.setText(isPersian ? "یک رمز عبور مستر تعیین کنید (حداقل ۶ کاراکتر)" : "Create a Master Password (min 6 characters)");
                 } else {
-                    tvAuthPrompt.setText(isPersian ? "تکرار رمز ۸ رقمی برای تأیید:" : "Confirm your 8-digit Master PIN:");
+                    tvAuthPrompt.setText(isPersian ? "تکرار رمز عبور برای تأیید:" : "Confirm your Master Password:");
                 }
             } else {
-                tvAuthPrompt.setText(isPersian ? "رمز مستر ۸ رقمی را وارد کنید" : "Enter your 8-digit Master PIN");
+                tvAuthPrompt.setText(isPersian ? "رمز عبور مستر را وارد کنید" : "Enter your Master Password");
             }
         }
 
-        updateIndicator();
+        if (tilMasterPassword != null) {
+            tilMasterPassword.setHint(isPersian ? "رمز عبور مستر" : "Master Password");
+        }
+        if (btnUnlock != null) {
+            btnUnlock.setText(isPersian ? "باز کردن" : "Unlock");
+        }
+
+        if (etMasterPassword != null) etMasterPassword.setText("");
+        showUnlockedUi();
     }
 
-    private void setupNumericKeypad() {
-        int[] buttonIds = new int[]{
-            R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4,
-            R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9
-        };
-
-        for (int id : buttonIds) {
-            Button btn = findViewById(id);
-            if (btn != null) {
-                btn.setOnClickListener(v -> {
-                    if (isLockedOut()) {
-                        return;
-                    }
-                    if (currentPin.length() < PIN_LENGTH) {
-                        currentPin.append(btn.getText().toString());
-                        updateIndicator();
-                        if (currentPin.length() == PIN_LENGTH) {
-                            handlePinComplete();
-                        }
-                    }
-                });
-            }
-        }
-
-        Button btnBackspace = findViewById(R.id.btnBackspace);
-        if (btnBackspace != null) {
-            btnBackspace.setOnClickListener(v -> {
-                if (isLockedOut()) return;
-                if (currentPin.length() > 0) {
-                    currentPin.deleteCharAt(currentPin.length() - 1);
-                    updateIndicator();
-                }
-            });
-        }
-    }
-
-    private void updateIndicator() {
-        if (tvPinIndicator == null || isLockedOut()) return;
-        StringBuilder dots = new StringBuilder();
-        for (int i = 0; i < currentPin.length(); i++) {
-            dots.append("● ");
-        }
-        for (int i = currentPin.length(); i < PIN_LENGTH; i++) {
-            dots.append("○ ");
-        }
-        tvPinIndicator.setText(dots.toString().trim());
-    }
-
-    private void handlePinComplete() {
-        String enteredPin = currentPin.toString();
+    private void attemptSubmit() {
+        if (isLockedOut() || etMasterPassword == null) return;
+        String entered = etMasterPassword.getText() != null ? etMasterPassword.getText().toString() : "";
 
         if (isSettingUpPin) {
-            if (tempPinToConfirm == null) {
-                tempPinToConfirm = enteredPin;
-                currentPin.setLength(0);
-                updateIndicator();
+            if (entered.length() < MIN_PASSWORD_LENGTH) {
+                Toast.makeText(this, isPersian ?
+                        ("رمز عبور باید حداقل " + MIN_PASSWORD_LENGTH + " کاراکتر باشد") :
+                        ("Password must be at least " + MIN_PASSWORD_LENGTH + " characters"), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (tempPasswordToConfirm == null) {
+                tempPasswordToConfirm = entered;
                 updateTexts();
             } else {
-                if (tempPinToConfirm.equals(enteredPin)) {
+                if (tempPasswordToConfirm.equals(entered)) {
                     byte[] salt = generateSalt();
-                    String hash = hashPin(enteredPin, salt);
+                    String hash = hashPin(entered, salt);
                     authPrefs.edit()
                             .putString(KEY_PIN_HASH, hash)
                             .putString(KEY_PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
@@ -175,13 +160,11 @@ public class AuthActivity extends AppCompatActivity {
                             .putInt(KEY_FAILED_ATTEMPTS, 0)
                             .putLong(KEY_LOCKOUT_UNTIL, 0)
                             .apply();
-                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master PIN set successfully", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
                     proceedToMain();
                 } else {
-                    Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "PINs do not match, try again", Toast.LENGTH_SHORT).show();
-                    tempPinToConfirm = null;
-                    currentPin.setLength(0);
-                    updateIndicator();
+                    Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "Passwords do not match, try again", Toast.LENGTH_SHORT).show();
+                    tempPasswordToConfirm = null;
                     updateTexts();
                 }
             }
@@ -192,13 +175,13 @@ public class AuthActivity extends AppCompatActivity {
             boolean matched;
             if (!savedSaltB64.isEmpty()) {
                 byte[] salt = Base64.decode(savedSaltB64, Base64.NO_WRAP);
-                String enteredHash = hashPin(enteredPin, salt);
+                String enteredHash = hashPin(entered, salt);
                 matched = savedHash.equals(enteredHash);
             } else {
-                matched = savedHash.equals(legacyHashPin(enteredPin));
+                matched = savedHash.equals(legacyHashPin(entered));
                 if (matched) {
                     byte[] newSalt = generateSalt();
-                    String newHash = hashPin(enteredPin, newSalt);
+                    String newHash = hashPin(entered, newSalt);
                     authPrefs.edit()
                             .putString(KEY_PIN_HASH, newHash)
                             .putString(KEY_PIN_SALT, Base64.encodeToString(newSalt, Base64.NO_WRAP))
@@ -214,8 +197,7 @@ public class AuthActivity extends AppCompatActivity {
                 proceedToMain();
             } else {
                 registerFailedAttempt();
-                currentPin.setLength(0);
-                if (!isLockedOut()) updateIndicator();
+                if (etMasterPassword != null) etMasterPassword.setText("");
             }
         }
     }
@@ -232,13 +214,29 @@ public class AuthActivity extends AppCompatActivity {
             int remaining = LOCKOUT_THRESHOLD - attempts;
             Toast.makeText(this, isPersian ?
                     ("رمز اشتباه است. " + remaining + " تلاش دیگر باقی مانده.") :
-                    ("Incorrect PIN. " + remaining + " attempts remaining."), Toast.LENGTH_SHORT).show();
+                    ("Incorrect password. " + remaining + " attempts remaining."), Toast.LENGTH_SHORT).show();
         }
     }
 
     private boolean isLockedOut() {
         long lockoutUntil = authPrefs.getLong(KEY_LOCKOUT_UNTIL, 0);
         return System.currentTimeMillis() < lockoutUntil;
+    }
+
+    private void showUnlockedUi() {
+        if (isLockedOut()) return;
+        if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.GONE);
+        if (tilMasterPassword != null) tilMasterPassword.setVisibility(android.view.View.VISIBLE);
+        if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.VISIBLE);
+    }
+
+    private void showLockedUi() {
+        if (tilMasterPassword != null) tilMasterPassword.setVisibility(android.view.View.GONE);
+        if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.GONE);
+        if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.VISIBLE);
+        if (tvAuthPrompt != null) {
+            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاشهای ناموفق" : "Locked due to failed attempts");
+        }
     }
 
     private void checkLockoutState() {
@@ -250,6 +248,7 @@ public class AuthActivity extends AppCompatActivity {
             updateTexts();
             return;
         }
+        showLockedUi();
         lockoutTickRunnable = new Runnable() {
             @Override
             public void run() {
@@ -263,12 +262,8 @@ public class AuthActivity extends AppCompatActivity {
                 long minutes = totalSeconds / 60;
                 long seconds = totalSeconds % 60;
                 String countdown = String.format(Locale.US, "%02d:%02d", minutes, seconds);
-
-                if (tvAuthPrompt != null) {
-                    tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاشهای ناموفق" : "Locked due to failed attempts");
-                }
-                if (tvPinIndicator != null) {
-                    tvPinIndicator.setText(countdown);
+                if (tvLockoutTimer != null) {
+                    tvLockoutTimer.setText(countdown);
                 }
                 lockoutHandler.postDelayed(this, 1000);
             }
@@ -296,24 +291,24 @@ public class AuthActivity extends AppCompatActivity {
         return salt;
     }
 
-    private String hashPin(String pin, byte[] salt) {
+    private String hashPin(String password, byte[] salt) {
         try {
-            KeySpec spec = new PBEKeySpec(pin.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS);
+            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] hash = factory.generateSecret(spec).getEncoded();
             return toHex(hash);
         } catch (Exception e) {
-            return legacyHashPin(pin);
+            return legacyHashPin(password);
         }
     }
 
-    private String legacyHashPin(String pin) {
+    private String legacyHashPin(String password) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest((pin + "OfflinePW_Salt_2026").getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest((password + "OfflinePW_Salt_2026").getBytes(StandardCharsets.UTF_8));
             return toHex(hash);
         } catch (Exception e) {
-            return pin;
+            return password;
         }
     }
 
