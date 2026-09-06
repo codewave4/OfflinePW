@@ -32,7 +32,8 @@
     <ImageView
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:src="@mipmap/ic_launcher"
+        android:src="@android:drawable/ic_lock_lock"
+        android:tint="#3B82F6"
         android:layout_marginBottom="12dp" />
 
     <TextView
@@ -69,11 +70,11 @@
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/tilMasterPassword"
-        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:endIconMode="password_toggle"
-        app:endIconTint="#A1A1AA"
+        app:passwordToggleEnabled="true"
+        app:passwordToggleTint="#A1A1AA"
         app:boxStrokeColor="#3B82F6"
         app:hintTextColor="#3B82F6"
         android:hint="Master Password">
