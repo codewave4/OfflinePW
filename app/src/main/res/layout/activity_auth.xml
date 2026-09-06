@@ -8,7 +8,6 @@
     android:background="#09090B"
     android:padding="24dp">
 
-    <!-- دکمه جابجایی زبان در گوشه بالا -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -50,17 +49,17 @@
         android:id="@+id/tvAuthPrompt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Enter your 8-digit Master PIN"
+        android:text="Enter your Master Password"
         android:textColor="#A1A1AA"
         android:textSize="15sp"
+        android:gravity="center"
         android:layout_marginBottom="16dp" />
 
-    <!-- متن هشدار مهم امنیتی بدون امکان بازیابی -->
     <TextView
         android:id="@+id/tvAuthWarning"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Your master PIN is never stored; therefore, if forgotten, recovery is mathematically impossible."
+        android:text="Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible."
         android:textColor="#EF4444"
         android:textSize="12sp"
         android:gravity="center"
@@ -68,40 +67,48 @@
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="24dp" />
 
-    <!-- نشانگر پین با رنگ سفید اضافه شده -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilMasterPassword"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:passwordToggleEnabled="true"
+        app:passwordToggleTint="#A1A1AA"
+        app:boxStrokeColor="#3B82F6"
+        app:hintTextColor="#3B82F6"
+        android:hint="Master Password">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etMasterPassword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textPassword"
+            android:textColor="#F4F4F5"
+            android:textSize="16sp"
+            android:imeOptions="actionDone" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <TextView
-        android:id="@+id/tvPinIndicator"
-        android:textColor="#FFFFFF"
+        android:id="@+id/tvLockoutTimer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="○ ○ ○ ○ ○ ○ ○ ○"
+        android:textColor="#FFFFFF"
         android:textSize="24sp"
         android:letterSpacing="0.15"
-        android:layout_marginBottom="28dp" />
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
 
-    <!-- کیپد عددی -->
-    <GridLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:columnCount="3"
-        android:alignmentMode="alignMargins"
-        android:columnOrderPreserved="true">
-
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn1" style="@style/Widget.Material3.Button.TonalButton" android:text="1" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn2" style="@style/Widget.Material3.Button.TonalButton" android:text="2" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn3" style="@style/Widget.Material3.Button.TonalButton" android:text="3" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn4" style="@style/Widget.Material3.Button.TonalButton" android:text="4" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn5" style="@style/Widget.Material3.Button.TonalButton" android:text="5" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn6" style="@style/Widget.Material3.Button.TonalButton" android:text="6" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn7" style="@style/Widget.Material3.Button.TonalButton" android:text="7" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn8" style="@style/Widget.Material3.Button.TonalButton" android:text="8" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn9" style="@style/Widget.Material3.Button.TonalButton" android:text="9" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-
-        <Space android:layout_width="72dp" android:layout_height="72dp" android:layout_margin="6dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btn0" style="@style/Widget.Material3.Button.TonalButton" android:text="0" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#F4F4F5" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-        <com.google.android.material.button.MaterialButton android:id="@+id/btnBackspace" style="@style/Widget.Material3.Button.TonalButton" android:text="⌫" android:layout_margin="6dp" android:textSize="22sp" android:textColor="#EF4444" app:backgroundTint="#18181B" app:cornerRadius="20dp" android:minWidth="72dp" android:minHeight="72dp"/>
-    </GridLayout>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnUnlock"
+        style="@style/Widget.Material3.Button"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="20dp"
+        android:text="Unlock"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:textColor="#09090B"
+        app:backgroundTint="#E4E4E7"
+        app:cornerRadius="14dp" />
 
 </LinearLayout>
