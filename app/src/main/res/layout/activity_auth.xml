@@ -32,8 +32,7 @@
     <ImageView
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:src="@android:drawable/ic_lock_lock"
-        android:tint="#3B82F6"
+        android:src="@drawable/ic_launcher"
         android:layout_marginBottom="12dp" />
 
     <TextView
