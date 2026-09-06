@@ -75,9 +75,15 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 - **JDK**: Java 17 or Java 21
 - **Gradle**: 8.0+
 
-License
+  ___
 
-This project is licensed under the MIT License — free and open for personal and community use.
+  ## License
+
+This project is licensed under the MIT License — free and open source for personal and community use.
+
+See the full LICENSE file for details.
+
+
 
 
 
