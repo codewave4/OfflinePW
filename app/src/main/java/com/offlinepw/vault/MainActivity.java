@@ -28,11 +28,12 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -40,8 +41,10 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+
 import com.offlinepw.vault.crypto.CryptoManager;
-import java.nio.charset.StandardCharsets;
+
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -59,8 +62,9 @@ public class MainActivity extends AppCompatActivity {
         private String password;
         private String notes;
         private String totpSecret;
+        private String website;
 
-        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret) {
+        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website) {
             this.id = id;
             this.title = title;
             this.category = category;
@@ -68,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
             this.password = password;
             this.notes = notes;
             this.totpSecret = totpSecret;
+            this.website = website;
         }
 
         public String getId() { return id; }
@@ -77,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
         public String getPassword() { return password; }
         public String getNotes() { return notes; }
         public String getTotpSecret() { return totpSecret; }
+        public String getWebsite() { return website; }
     }
 
     public static class VaultDatabaseHelper extends SQLiteOpenHelper {
@@ -88,9 +94,10 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_PASSWORD = "password";
         public static final String COLUMN_NOTES = "notes";
         public static final String COLUMN_TOTP = "totp_secret";
+        public static final String COLUMN_WEBSITE = "website";
 
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 2);
+            super(context, "offline_pw_vault.db", null, 3);
         }
 
         @Override
@@ -102,7 +109,8 @@ public class MainActivity extends AppCompatActivity {
                     COLUMN_USERNAME + " TEXT, " +
                     COLUMN_PASSWORD + " TEXT, " +
                     COLUMN_NOTES + " TEXT, " +
-                    COLUMN_TOTP + " TEXT)");
+                    COLUMN_TOTP + " TEXT, " +
+                    COLUMN_WEBSITE + " TEXT)");
         }
 
         @Override
@@ -110,6 +118,11 @@ public class MainActivity extends AppCompatActivity {
             if (oldVersion < 2) {
                 try {
                     db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_TOTP + " TEXT");
+                } catch (Exception ignored) {}
+            }
+            if (oldVersion < 3) {
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_WEBSITE + " TEXT");
                 } catch (Exception ignored) {}
             }
         }
@@ -124,6 +137,7 @@ public class MainActivity extends AppCompatActivity {
             cv.put(COLUMN_PASSWORD, crypto.encrypt(item.getPassword()));
             cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes()));
             cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret()));
+            cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite()));
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
@@ -143,7 +157,12 @@ public class MainActivity extends AppCompatActivity {
                 if (totpIndex != -1) {
                     totp = crypto.decrypt(c.getString(totpIndex));
                 }
-                list.add(new VaultItem(id, title, cat, user, pass, notes, totp));
+                String website = "";
+                int websiteIndex = c.getColumnIndex(COLUMN_WEBSITE);
+                if (websiteIndex != -1) {
+                    website = crypto.decrypt(c.getString(websiteIndex));
+                }
+                list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website));
             }
             c.close();
             return list;
@@ -258,44 +277,33 @@ public class MainActivity extends AppCompatActivity {
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             VaultItem item = displayList.get(position);
             holder.tvTitle.setText(item.getTitle());
-            holder.tvCategory.setText(item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN");
 
-            if (item.getUsername() != null && !item.getUsername().isEmpty()) {
-                if (item.getUsername().length() > 4) {
-                    holder.tvUsername.setText("•••• •••• " + item.getUsername().substring(item.getUsername().length() - 4));
-                } else {
-                    holder.tvUsername.setText(item.getUsername());
-                }
-            } else {
-                holder.tvUsername.setText("•••• •••• ••••");
-            }
+            String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
+            holder.tvCategory.setText(cat);
+            holder.tvUsername.setText(item.getUsername());
 
             if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
-                int sec = TotpGenerator.getSecondsRemaining();
+                holder.tvTotpDisplay.setVisibility(View.VISIBLE);
                 boolean isRevealed = revealedTotpItemIds.contains(item.getId());
-
+                long remainingSecs = 30 - ((System.currentTimeMillis() / 1000) % 30);
                 if (isRevealed) {
                     String code = TotpGenerator.generateCode(item.getTotpSecret());
-                    holder.tvTotpDisplay.setText("🔑 2FA: " + code + " (" + sec + "s)");
+                    holder.tvTotpDisplay.setText((isPersian ? "کد ۲مرحله‌ای: " : "TOTP: ") + code + " (" + remainingSecs + "s)");
                 } else {
-                    holder.tvTotpDisplay.setText("🔑 2FA: •••••• (" + sec + "s)");
+                    holder.tvTotpDisplay.setText((isPersian ? "کد ۲مرحله‌ای: ••••••" : "TOTP: ••••••") + " (" + remainingSecs + "s)");
                 }
-                holder.tvTotpDisplay.setVisibility(View.VISIBLE);
-
                 holder.tvTotpDisplay.setOnClickListener(v -> {
-                    String code = TotpGenerator.generateCode(item.getTotpSecret());
-                    copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", code);
+                    String currentCode = TotpGenerator.generateCode(item.getTotpSecret());
+                    copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentCode);
                     revealedTotpItemIds.add(item.getId());
-                    notifyItemChanged(position);
-
-                    v.postDelayed(() -> {
+                    notifyItemChanged(holder.getAdapterPosition());
+                    holder.tvTotpDisplay.postDelayed(() -> {
                         revealedTotpItemIds.remove(item.getId());
-                        notifyItemChanged(position);
+                        notifyDataSetChanged();
                     }, 5000);
                 });
             } else {
                 holder.tvTotpDisplay.setVisibility(View.GONE);
-                holder.tvTotpDisplay.setOnClickListener(null);
             }
 
             holder.card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
@@ -448,43 +456,51 @@ public class MainActivity extends AppCompatActivity {
         if (etSearch != null) {
             etSearch.setHint(isPersian ? "جستجو در عنوان، حساب و تگ‌ها..." : "Search titles, accounts, tags...");
         }
+        if (tvAppTitle != null) {
+            tvAppTitle.setText("OfflinePW");
+        }
     }
 
     private void updateThemeUI() {
-        if (btnThemeToggle != null) {
-            btnThemeToggle.setText(isDarkMode ? "DARK" : "LIGHT");
-        }
-        if (mainRootLayout != null) {
-            mainRootLayout.setBackgroundColor(Color.parseColor(isDarkMode ? "#09090B" : "#FAFAFA"));
-        }
-        if (appBarLayout != null) {
-            appBarLayout.setBackgroundColor(Color.parseColor(isDarkMode ? "#09090B" : "#FAFAFA"));
-        }
-        if (tvAppTitle != null) {
-            tvAppTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
-        }
-        if (etSearch != null) {
-            etSearch.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
-            etSearch.setHintTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
-        }
+        int bgColor = Color.parseColor(isDarkMode ? "#09090B" : "#F4F4F5");
+        int cardBg = Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF");
+        int textColor = Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B");
+        int strokeColor = Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7");
+
+        if (mainRootLayout != null) mainRootLayout.setBackgroundColor(bgColor);
+        if (appBarLayout != null) appBarLayout.setBackgroundColor(bgColor);
+        if (tvAppTitle != null) tvAppTitle.setTextColor(textColor);
+        if (btnThemeToggle != null) btnThemeToggle.setText(isDarkMode ? "🌙" : "☀️");
+
         if (btnAbout != null) {
-            btnAbout.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#E4E4E7"));
-            btnAbout.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+            btnAbout.setBackgroundTintList(ColorStateList.valueOf(cardBg));
+            btnAbout.setStrokeColor(ColorStateList.valueOf(strokeColor));
+            btnAbout.setTextColor(textColor);
         }
         if (btnLanguage != null) {
-            btnLanguage.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#E4E4E7"));
-            btnLanguage.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+            btnLanguage.setBackgroundTintList(ColorStateList.valueOf(cardBg));
+            btnLanguage.setStrokeColor(ColorStateList.valueOf(strokeColor));
+            btnLanguage.setTextColor(textColor);
         }
         if (btnThemeToggle != null) {
-            btnThemeToggle.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#E4E4E7"));
-            btnThemeToggle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+            btnThemeToggle.setBackgroundTintList(ColorStateList.valueOf(cardBg));
+            btnThemeToggle.setStrokeColor(ColorStateList.valueOf(strokeColor));
         }
-        adapter.notifyDataSetChanged();
+        if (etSearch != null) {
+            etSearch.setBackgroundColor(cardBg);
+            etSearch.setTextColor(textColor);
+        }
+
+        if (adapter != null) adapter.notifyDataSetChanged();
     }
 
     private void loadVaultData() {
-        List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
-        adapter.setItems(items);
+        new Thread(() -> {
+            List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
+            runOnUiThread(() -> {
+                if (adapter != null) adapter.setItems(items);
+            });
+        }).start();
     }
 
     private void showAboutSecurityDialog() {
@@ -496,7 +512,7 @@ public class MainActivity extends AppCompatActivity {
         root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
 
         TextView tvHeaderTitle = new TextView(this);
-        tvHeaderTitle.setText(isPersian ? "معماری امنیت و حریم خصوصی" : "Security & Privacy Architecture");
+        tvHeaderTitle.setText(isPersian ? "معماری و لایه‌های امنیتی OfflinePW" : "OfflinePW Security Architecture");
         tvHeaderTitle.setTextSize(19f);
         tvHeaderTitle.setTypeface(null, Typeface.BOLD);
         tvHeaderTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
@@ -511,19 +527,19 @@ public class MainActivity extends AppCompatActivity {
         root.addView(divider);
 
         String[][] itemsFa = {
-            {"رمزنگاری کامل دادهها", "تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) با AES-256-GCM رمزنگاری میشوند و بهصورت رمزشده در دستگاه ذخیره میگردند."},
-            {"کلید سختافزاری دستگاه", "کلید اصلی رمزنگاری در ماژول امنیتی سختافزار گوشی (StrongBox یا TEE) ساخته و نگهداری میشود و هرگز بهصورت متن ساده در برنامه ذخیره نمیشود."},
-            {"رمز مستر مقاوم در برابر حدسزنی", "رمز مستر ۸ رقمی با الگوریتم PBKDF2 و صد و بیست هزار تکرار به همراه یک salt تصادفی و منحصربهفرد برای هر نصب، هش میشود. خود رمز هرگز ذخیره نمیشود."},
-            {"محدودیت تلاشهای ناموفق", "پس از پنج بار وارد کردن رمز اشتباه، برنامه به مدت پنج دقیقه قفل میشود تا از حدسزنی خودکار رمز جلوگیری شود."},
-            {"بدون اتصال اینترنت", "برنامه هیچ مجوز اتصال به اینترنت ندارد؛ هیچ دادهای هرگز از دستگاه شما خارج نمیشود."},
-            {"محافظت در برابر اسکرینشات", "با فعالسازی FLAG_SECURE، امکان اسکرینشات یا ضبط صفحه در تمام صفحات حساس برنامه غیرفعال است."}
+            {"رمزنگاری کامل داده‌ها", "تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) با AES-256-GCM رمزنگاری می‌شوند و به‌صورت رمزشده در دستگاه ذخیره می‌گردند."},
+            {"کلید سخت‌افزاری دستگاه", "کلید اصلی رمزنگاری در ماژول امنیتی سخت‌افزار گوشی (StrongBox یا TEE) ساخته و نگهداری می‌شود و هرگز به‌صورت متن ساده در برنامه ذخیره نمی‌شود."},
+            {"رمز عبور مستر مقاوم در برابر حدس‌زنی", "رمز عبور مستر با الگوریتم PBKDF2 و ۱۲۰,۰۰۰ تکرار به همراه یک salt تصادفی و منحصربه‌فرد برای هر نصب، هش می‌شود. خود رمز هرگز ذخیره نمی‌شود."},
+            {"محدودیت تلاش‌های ناموفق", "پس از ۵ بار وارد کردن رمز اشتباه، برنامه به مدت ۵ دقیقه قفل می‌شود تا از حدس‌زنی خودکار رمز جلوگیری شود."},
+            {"بدون اتصال اینترنت", "برنامه هیچ مجوز اتصال به اینترنت ندارد؛ هیچ داده‌ای هرگز از دستگاه شما خارج نمی‌شود."},
+            {"محافظت در برابر اسکرین‌شات", "با فعال‌سازی FLAG_SECURE، امکان اسکرین‌شات یا ضبط صفحه در تمام صفحات حساس برنامه غیرفعال است."}
         };
 
         String[][] itemsEn = {
             {"Full Data Encryption", "All sensitive fields (passwords, TOTP secrets, notes) are encrypted with AES-256-GCM and stored encrypted on your device."},
             {"Hardware-Backed Key", "The master encryption key is generated and held inside your device's secure hardware module (StrongBox or TEE) and is never stored as plain text in the app."},
-            {"Brute-Force Resistant Master PIN", "Your 8-digit master PIN is hashed using PBKDF2 with 120,000 iterations and a unique random salt per installation. The PIN itself is never stored."},
-            {"Failed Attempt Lockout", "After five incorrect PIN attempts, the app locks for five minutes to prevent automated guessing."},
+            {"Brute-Force Resistant Master Password", "Your master password is hashed using PBKDF2 with 120,000 iterations and a unique random salt per installation. The password itself is never stored."},
+            {"Failed Attempt Lockout", "After 5 incorrect password attempts, the app locks for 5 minutes to prevent automated guessing."},
             {"Zero Internet Access", "The app requests no internet permission whatsoever; no data ever leaves your device."},
             {"Screenshot Protection", "FLAG_SECURE is enabled across all sensitive screens, blocking screenshots and screen recording."}
         };
@@ -580,6 +596,7 @@ public class MainActivity extends AppCompatActivity {
         TextInputLayout tilUsername = dialogView.findViewById(R.id.tilUsername);
         TextInputLayout tilPassword = dialogView.findViewById(R.id.tilPassword);
         TextInputLayout tilTotpSecret = dialogView.findViewById(R.id.tilTotpSecret);
+        TextInputLayout tilWebsite = dialogView.findViewById(R.id.tilWebsite);
         TextInputLayout tilNotes = dialogView.findViewById(R.id.tilNotes);
 
         TextInputEditText etTitle = dialogView.findViewById(R.id.etTitle);
@@ -587,6 +604,7 @@ public class MainActivity extends AppCompatActivity {
         TextInputEditText etUsername = dialogView.findViewById(R.id.etUsername);
         TextInputEditText etPassword = dialogView.findViewById(R.id.etPassword);
         TextInputEditText etTotpSecret = dialogView.findViewById(R.id.etTotpSecret);
+        TextInputEditText etWebsite = dialogView.findViewById(R.id.etWebsite);
         TextInputEditText etNotes = dialogView.findViewById(R.id.etNotes);
 
         MaterialButton btnGenerate = dialogView.findViewById(R.id.btnGenerate);
@@ -626,6 +644,7 @@ public class MainActivity extends AppCompatActivity {
             etUsername.setText(existingItem.getUsername());
             etPassword.setText(existingItem.getPassword());
             if (etTotpSecret != null) etTotpSecret.setText(existingItem.getTotpSecret());
+            if (etWebsite != null) etWebsite.setText(existingItem.getWebsite());
             etNotes.setText(existingItem.getNotes());
         }
 
@@ -642,6 +661,7 @@ public class MainActivity extends AppCompatActivity {
             String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
             String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
             String totp = (etTotpSecret != null && etTotpSecret.getText() != null) ? etTotpSecret.getText().toString().trim() : "";
+            String website = (etWebsite != null && etWebsite.getText() != null) ? etWebsite.getText().toString().trim() : "";
             String notes = etNotes.getText() != null ? etNotes.getText().toString().trim() : "";
 
             if (title.isEmpty() || password.isEmpty()) {
@@ -650,7 +670,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             String id = existingItem != null ? existingItem.getId() : UUID.randomUUID().toString();
-            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp);
+            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website);
             dbHelper.insertItem(item, cryptoManager);
             loadVaultData();
             dialog.dismiss();
@@ -705,6 +725,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
             root.addView(buildTotpFieldRow(item));
+        }
+        if (item.getWebsite() != null && !item.getWebsite().trim().isEmpty()) {
+            root.addView(buildWebsiteFieldRow(item));
         }
         if (item.getNotes() != null && !item.getNotes().isEmpty()) {
             root.addView(buildFieldRow(isPersian ? "یادداشت" : "Notes", item.getNotes(), false));
@@ -831,6 +854,74 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         valueRow.addView(tvValue, valueLp);
         row.addView(valueRow);
+        return row;
+    }
+
+    private LinearLayout buildWebsiteFieldRow(VaultItem item) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, 24, 0, 0);
+
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(isPersian ? "وبسایت" : "Website");
+        tvLabel.setTextSize(12f);
+        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
+        row.addView(tvLabel);
+
+        int iconColor = Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A");
+        String[] lines = item.getWebsite().split("\\r?\\n");
+
+        for (String rawLine : lines) {
+            final String url = rawLine.trim();
+            if (url.isEmpty()) continue;
+
+            LinearLayout valueRow = new LinearLayout(this);
+            valueRow.setOrientation(LinearLayout.HORIZONTAL);
+            valueRow.setGravity(Gravity.CENTER_VERTICAL);
+            valueRow.setPadding(0, 6, 0, 0);
+
+            ImageView ivGlobe = new ImageView(this);
+            ivGlobe.setImageResource(R.drawable.ic_public);
+            ivGlobe.setColorFilter(Color.parseColor("#3B82F6"));
+            LinearLayout.LayoutParams globeLp = new LinearLayout.LayoutParams(44, 44);
+            globeLp.setMarginEnd(12);
+            ivGlobe.setLayoutParams(globeLp);
+            valueRow.addView(ivGlobe);
+
+            TextView tvValue = new TextView(this);
+            tvValue.setTextSize(14f);
+            tvValue.setTextColor(Color.parseColor("#3B82F6"));
+            tvValue.setText(url);
+            tvValue.setSingleLine(true);
+            tvValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            tvValue.setLayoutParams(valueLp);
+            tvValue.setOnClickListener(v -> {
+                String target = url;
+                if (!target.startsWith("http://") && !target.startsWith("https://")) {
+                    target = "https://" + target;
+                }
+                try {
+                    android.content.Intent browserIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target));
+                    startActivity(browserIntent);
+                } catch (Exception e) {
+                    Toast.makeText(this, isPersian ? "امکان باز کردن لینک نیست" : "Unable to open link", Toast.LENGTH_SHORT).show();
+                }
+            });
+            valueRow.addView(tvValue);
+
+            ImageView ivCopy = new ImageView(this);
+            ivCopy.setImageResource(R.drawable.ic_content_copy);
+            ivCopy.setColorFilter(iconColor);
+            LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(44, 44);
+            copyLp.setMarginStart(16);
+            ivCopy.setLayoutParams(copyLp);
+            ivCopy.setOnClickListener(v -> copyToClipboard(isPersian ? "وبسایت" : "Website", url));
+            valueRow.addView(ivCopy);
+
+            row.addView(valueRow);
+        }
+
         return row;
     }
 
