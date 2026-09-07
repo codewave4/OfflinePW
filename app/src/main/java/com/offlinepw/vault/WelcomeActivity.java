@@ -33,7 +33,8 @@ public class WelcomeActivity extends AppCompatActivity {
 
         authPrefs = getSharedPreferences(PREF_AUTH, MODE_PRIVATE);
 
-        if (authPrefs.getBoolean(KEY_WELCOME_SHOWN, false)) {
+        boolean forceShow = getIntent().getBooleanExtra("force_show", false);
+        if (authPrefs.getBoolean(KEY_WELCOME_SHOWN, false) && !forceShow) {
             goToAuth();
             return;
         }
@@ -84,8 +85,8 @@ public class WelcomeActivity extends AppCompatActivity {
         }
         if (tvWelcomeBody != null) {
             tvWelcomeBody.setText(isPersian ?
-                    "امنیت شما کاملاً به رمز عبور مستری که انتخاب می‌کنید بستگی دارد. هر چقدر رمزتان قوی‌تر و ترکیبی‌تر باشد (حروف بزرگ، حروف کوچک، عدد، نماد)، شکستن آن سخت‌تر می‌شود — خودتان بهتر می‌دانید چطور رمزی قوی بسازید.\n\nOfflinePW کاملاً متن‌باز (Open Source) است و می‌توانید تمام کدهای آن را بررسی کنید." :
-                    "Your security depends entirely on the master password you choose. The stronger and more mixed it is (uppercase, lowercase, numbers, symbols), the harder it becomes to break — you know best how to make it strong.\n\nOfflinePW is fully open-source; you can review every line of its code.");
+                    "امنیت داده های شما بر پایه ی رمزنگاری استاندارد صنعتی (AES-256) و کلید سخت افزاری گوشی شماست. برای بالاترین سطح امنیت، توصیه میشود رمز عبور مستری ترکیبی از حروف بزرگ، حروف کوچک، عدد و نماد انتخاب کنید.\n\nOfflinePW کاملاً متنباز (Open Source) است و میتوانید تمام کدهای آن را بررسی کنید." :
+                    "Your data is protected by industry-standard encryption (AES-256) and your device's secure hardware key. For maximum security, we recommend choosing a master password that combines uppercase, lowercase, numbers, and symbols.\n\nOfflinePW is fully open-source; you can review every line of its code.");
         }
         if (btnWelcomeContinue != null) {
             btnWelcomeContinue.setText(isPersian ? "ادامه" : "Continue");
@@ -102,6 +103,10 @@ public class WelcomeActivity extends AppCompatActivity {
     }
 
     private void goToAuth() {
+        if (getIntent().getBooleanExtra("force_show", false)) {
+            finish();
+            return;
+        }
         Intent intent = new Intent(this, AuthActivity.class);
         startActivity(intent);
         finish();
