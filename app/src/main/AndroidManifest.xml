@@ -7,9 +7,8 @@
         android:roundIcon="@drawable/ic_launcher"
         android:theme="@style/Theme.Material3.Dark.NoActionBar">
 
-        <!-- صفحه قفل و احراز هویت پین به عنوان نقطه ورود اصلی -->
         <activity
-            android:name=".AuthActivity"
+            android:name=".WelcomeActivity"
             android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>
@@ -17,6 +16,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".AuthActivity"
+            android:exported="false"
+            android:launchMode="singleTask" />
 
         <activity
             android:name=".MainActivity"
