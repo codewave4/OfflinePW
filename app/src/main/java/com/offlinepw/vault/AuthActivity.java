@@ -72,6 +72,15 @@ public class AuthActivity extends AppCompatActivity {
         btnUnlock = findViewById(R.id.btnUnlock);
         btnAuthLang = findViewById(R.id.btnAuthLang);
 
+        MaterialButton btnAuthHelp = findViewById(R.id.btnAuthHelp);
+        if (btnAuthHelp != null) {
+            btnAuthHelp.setOnClickListener(v -> {
+                Intent intent = new Intent(this, WelcomeActivity.class);
+                intent.putExtra("force_show", true);
+                startActivity(intent);
+            });
+        }
+
         boolean isSetup = authPrefs.getBoolean(KEY_IS_SETUP, false);
         isSettingUpPin = !isSetup;
 
@@ -235,7 +244,7 @@ public class AuthActivity extends AppCompatActivity {
         if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.GONE);
         if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.VISIBLE);
         if (tvAuthPrompt != null) {
-            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاشهای ناموفق" : "Locked due to failed attempts");
+            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاش های ناموفق" : "Locked due to failed attempts");
         }
     }
 
