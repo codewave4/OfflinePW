@@ -11,8 +11,30 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="end"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:layout_marginBottom="12dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAuthHelp"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:text="?"
+            android:textColor="#F4F4F5"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="#18181B"
+            app:cornerRadius="12dp"
+            app:strokeColor="#27272A"
+            app:strokeWidth="1dp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAuthLang"
