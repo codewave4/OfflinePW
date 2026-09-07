@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#09090B">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:layout_marginBottom="12dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnWelcomeLang"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:text="FA"
+                android:textColor="#F4F4F5"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                app:backgroundTint="#18181B"
+                app:cornerRadius="12dp"
+                app:strokeColor="#27272A"
+                app:strokeWidth="1dp" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:src="@drawable/ic_public"
+            app:tint="#3B82F6"
+            android:layout_marginBottom="14dp" />
+
+        <TextView
+            android:id="@+id/tvWelcomeTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Welcome to OfflinePW"
+            android:textColor="#F4F4F5"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/tvWelcomeBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Your security depends entirely on the master password you choose. The stronger and more mixed it is (uppercase, lowercase, numbers, symbols), the harder it becomes to break — you know best how to make it strong.\n\nOfflinePW is fully open-source; you can review every line of its code."
+            android:textColor="#A1A1AA"
+            android:textSize="14sp"
+            android:lineSpacingExtra="4dp"
+            android:gravity="center"
+            android:layout_marginBottom="20dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#18181B"
+            android:padding="12dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:id="@+id/tvGithubLink"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="https://github.com/codewave4/OfflinePW"
+                android:textColor="#3B82F6"
+                android:textSize="12sp"
+                android:textIsSelectable="false"
+                android:focusable="false"
+                android:clickable="false" />
+
+            <ImageView
+                android:id="@+id/ivCopyGithub"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_content_copy"
+                app:tint="#A1A1AA"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnWelcomeContinue"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="Continue"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#09090B"
+            app:backgroundTint="#E4E4E7"
+            app:cornerRadius="14dp" />
+
+    </LinearLayout>
+</ScrollView>
