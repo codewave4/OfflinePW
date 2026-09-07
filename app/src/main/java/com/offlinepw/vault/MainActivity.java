@@ -470,7 +470,7 @@ public class MainActivity extends AppCompatActivity {
         if (mainRootLayout != null) mainRootLayout.setBackgroundColor(bgColor);
         if (appBarLayout != null) appBarLayout.setBackgroundColor(bgColor);
         if (tvAppTitle != null) tvAppTitle.setTextColor(textColor);
-        if (btnThemeToggle != null) btnThemeToggle.setText(isDarkMode ? "🌙" : "☀️");
+        if (btnThemeToggle != null) btnThemeToggle.setText(isDarkMode ? "DARK" : "LIGHT");
 
         if (btnAbout != null) {
             btnAbout.setBackgroundTintList(ColorStateList.valueOf(cardBg));
@@ -896,18 +896,6 @@ public class MainActivity extends AppCompatActivity {
             tvValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             tvValue.setLayoutParams(valueLp);
-            tvValue.setOnClickListener(v -> {
-                String target = url;
-                if (!target.startsWith("http://") && !target.startsWith("https://")) {
-                    target = "https://" + target;
-                }
-                try {
-                    android.content.Intent browserIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target));
-                    startActivity(browserIntent);
-                } catch (Exception e) {
-                    Toast.makeText(this, isPersian ? "امکان باز کردن لینک نیست" : "Unable to open link", Toast.LENGTH_SHORT).show();
-                }
-            });
             valueRow.addView(tvValue);
 
             ImageView ivCopy = new ImageView(this);
