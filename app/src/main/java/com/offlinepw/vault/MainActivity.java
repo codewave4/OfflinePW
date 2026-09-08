@@ -44,6 +44,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 
 import com.offlinepw.vault.crypto.CryptoManager;
+import com.offlinepw.vault.crypto.VaultSession;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -446,6 +447,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        VaultSession.clear();
         finish();
     }
 
