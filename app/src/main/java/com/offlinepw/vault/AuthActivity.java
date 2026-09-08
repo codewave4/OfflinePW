@@ -14,27 +14,34 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import com.offlinepw.vault.crypto.VaultSession;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
 import java.util.Locale;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
 
 public class AuthActivity extends AppCompatActivity {
     private static final int MIN_PASSWORD_LENGTH = 6;
     private static final String PREF_AUTH = "OfflinePW_Auth";
     private static final String PREF_SETTINGS = "OfflinePW_Prefs";
-    private static final String KEY_PIN_HASH = "master_pin_hash";
-    private static final String KEY_PIN_SALT = "master_pin_salt";
     private static final String KEY_IS_SETUP = "pin_is_setup";
+    private static final String KEY_KEK_SALT = "kek_salt";
+    private static final String KEY_WRAPPED_DEK = "wrapped_dek";
     private static final String KEY_FAILED_ATTEMPTS = "failed_attempts";
     private static final String KEY_LOCKOUT_UNTIL = "lockout_until";
 
-    private static final int PBKDF2_ITERATIONS = 120000;
-    private static final int KEY_LENGTH_BITS = 256;
+    private static final int PBKDF2_ITERATIONS = 600000;
+    private static final int KEK_LENGTH_BITS = 256;
+    private static final int DEK_LENGTH_BITS = 256;
     private static final int SALT_LENGTH_BYTES = 16;
+    private static final int GCM_TAG_LENGTH = 128;
+    private static final int IV_LENGTH = 12;
     private static final int LOCKOUT_THRESHOLD = 5;
     private static final long LOCKOUT_DURATION_MS = 5 * 60 * 1000L;
 
@@ -160,17 +167,7 @@ public class AuthActivity extends AppCompatActivity {
                 updateTexts();
             } else {
                 if (tempPasswordToConfirm.equals(entered)) {
-                    byte[] salt = generateSalt();
-                    String hash = hashPin(entered, salt);
-                    authPrefs.edit()
-                            .putString(KEY_PIN_HASH, hash)
-                            .putString(KEY_PIN_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-                            .putBoolean(KEY_IS_SETUP, true)
-                            .putInt(KEY_FAILED_ATTEMPTS, 0)
-                            .putLong(KEY_LOCKOUT_UNTIL, 0)
-                            .apply();
-                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
-                    proceedToMain();
+                    createNewVaultKey(entered);
                 } else {
                     Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "Passwords do not match, try again", Toast.LENGTH_SHORT).show();
                     tempPasswordToConfirm = null;
@@ -178,37 +175,95 @@ public class AuthActivity extends AppCompatActivity {
                 }
             }
         } else {
-            String savedHash = authPrefs.getString(KEY_PIN_HASH, "");
-            String savedSaltB64 = authPrefs.getString(KEY_PIN_SALT, "");
-
-            boolean matched;
-            if (!savedSaltB64.isEmpty()) {
-                byte[] salt = Base64.decode(savedSaltB64, Base64.NO_WRAP);
-                String enteredHash = hashPin(entered, salt);
-                matched = savedHash.equals(enteredHash);
-            } else {
-                matched = savedHash.equals(legacyHashPin(entered));
-                if (matched) {
-                    byte[] newSalt = generateSalt();
-                    String newHash = hashPin(entered, newSalt);
-                    authPrefs.edit()
-                            .putString(KEY_PIN_HASH, newHash)
-                            .putString(KEY_PIN_SALT, Base64.encodeToString(newSalt, Base64.NO_WRAP))
-                            .apply();
-                }
-            }
-
-            if (matched) {
-                authPrefs.edit()
-                        .putInt(KEY_FAILED_ATTEMPTS, 0)
-                        .putLong(KEY_LOCKOUT_UNTIL, 0)
-                        .apply();
-                proceedToMain();
-            } else {
-                registerFailedAttempt();
-                if (etMasterPassword != null) etMasterPassword.setText("");
-            }
+            attemptUnwrapDek(entered);
         }
+    }
+
+    private void createNewVaultKey(String password) {
+        try {
+            byte[] salt = generateRandomBytes(SALT_LENGTH_BYTES);
+            SecretKey kek = deriveKek(password, salt);
+
+            KeyGenerator dekGen = KeyGenerator.getInstance("AES");
+            dekGen.init(DEK_LENGTH_BITS, new SecureRandom());
+            SecretKey dek = dekGen.generateKey();
+
+            String wrappedDek = wrapDek(dek, kek);
+
+            authPrefs.edit()
+                    .putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                    .putString(KEY_WRAPPED_DEK, wrappedDek)
+                    .putBoolean(KEY_IS_SETUP, true)
+                    .putInt(KEY_FAILED_ATTEMPTS, 0)
+                    .putLong(KEY_LOCKOUT_UNTIL, 0)
+                    .apply();
+
+            VaultSession.setDek(dek);
+            Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
+            proceedToMain();
+        } catch (Exception e) {
+            Toast.makeText(this, isPersian ? "خطا در ساخت کلید امن" : "Error creating secure key", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void attemptUnwrapDek(String password) {
+        try {
+            String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
+            String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
+            if (saltB64.isEmpty() || wrappedDek.isEmpty()) {
+                registerFailedAttempt();
+                return;
+            }
+            byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
+            SecretKey kek = deriveKek(password, salt);
+            SecretKey dek = unwrapDek(wrappedDek, kek);
+
+            VaultSession.setDek(dek);
+            authPrefs.edit()
+                    .putInt(KEY_FAILED_ATTEMPTS, 0)
+                    .putLong(KEY_LOCKOUT_UNTIL, 0)
+                    .apply();
+            proceedToMain();
+        } catch (Exception e) {
+            registerFailedAttempt();
+            if (etMasterPassword != null) etMasterPassword.setText("");
+        }
+    }
+
+    private SecretKey deriveKek(String password, byte[] salt) throws Exception {
+        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEK_LENGTH_BITS);
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        byte[] kekBytes = factory.generateSecret(spec).getEncoded();
+        return new SecretKeySpec(kekBytes, "AES");
+    }
+
+    private String wrapDek(SecretKey dek, SecretKey kek) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, kek);
+        byte[] iv = cipher.getIV();
+        byte[] wrapped = cipher.doFinal(dek.getEncoded());
+        byte[] combined = new byte[iv.length + wrapped.length];
+        System.arraycopy(iv, 0, combined, 0, iv.length);
+        System.arraycopy(wrapped, 0, combined, iv.length, wrapped.length);
+        return Base64.encodeToString(combined, Base64.NO_WRAP);
+    }
+
+    private SecretKey unwrapDek(String wrappedDekB64, SecretKey kek) throws Exception {
+        byte[] combined = Base64.decode(wrappedDekB64, Base64.NO_WRAP);
+        byte[] iv = new byte[IV_LENGTH];
+        byte[] wrapped = new byte[combined.length - IV_LENGTH];
+        System.arraycopy(combined, 0, iv, 0, IV_LENGTH);
+        System.arraycopy(combined, IV_LENGTH, wrapped, 0, wrapped.length);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, kek, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+        byte[] dekBytes = cipher.doFinal(wrapped);
+        return new SecretKeySpec(dekBytes, "AES");
+    }
+
+    private byte[] generateRandomBytes(int length) {
+        byte[] bytes = new byte[length];
+        new SecureRandom().nextBytes(bytes);
+        return bytes;
     }
 
     private void registerFailedAttempt() {
@@ -244,7 +299,7 @@ public class AuthActivity extends AppCompatActivity {
         if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.GONE);
         if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.VISIBLE);
         if (tvAuthPrompt != null) {
-            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاش های ناموفق" : "Locked due to failed attempts");
+            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاشهای ناموفق" : "Locked due to failed attempts");
         }
     }
 
@@ -292,42 +347,5 @@ public class AuthActivity extends AppCompatActivity {
         Intent intent = new Intent(this, MainActivity.class);
         startActivity(intent);
         finish();
-    }
-
-    private byte[] generateSalt() {
-        byte[] salt = new byte[SALT_LENGTH_BYTES];
-        new SecureRandom().nextBytes(salt);
-        return salt;
-    }
-
-    private String hashPin(String password, byte[] salt) {
-        try {
-            KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS);
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] hash = factory.generateSecret(spec).getEncoded();
-            return toHex(hash);
-        } catch (Exception e) {
-            return legacyHashPin(password);
-        }
-    }
-
-    private String legacyHashPin(String password) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest((password + "OfflinePW_Salt_2026").getBytes(StandardCharsets.UTF_8));
-            return toHex(hash);
-        } catch (Exception e) {
-            return password;
-        }
-    }
-
-    private String toHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : bytes) {
-            String hex = Integer.toHexString(0xff & b);
-            if (hex.length() == 1) hexString.append('0');
-            hexString.append(hex);
-        }
-        return hexString.toString();
     }
 }
