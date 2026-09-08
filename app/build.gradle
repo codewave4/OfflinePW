@@ -17,7 +17,6 @@ android {
     signingConfigs {
         release {
             storeFile file("release.keystore")
-            // خواندن صرفاً از متغیرهای امن سکرت گیت‌هاب بدون هاردکد
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
             keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "offlinepw_key"
             keyPassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
@@ -49,4 +48,6 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'net.zetetic:android-database-sqlcipher:4.5.4'
+    implementation 'androidx.sqlite:sqlite:2.4.0'
 }
