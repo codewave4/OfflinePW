@@ -1,10 +1,10 @@
 package com.offlinepw.vault;
 
-import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
@@ -30,6 +30,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -136,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void insertItem(VaultItem item, CryptoManager crypto) {
             String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase(passphrase);
             ContentValues cv = new ContentValues();
             String id = item.getId();
@@ -150,36 +153,48 @@ public class MainActivity extends AppCompatActivity {
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
-        public List<VaultItem> getAllDecryptedItems(CryptoManager crypto) {
+        public List<VaultItem> getAllDecryptedItems(CryptoManager crypto, AtomicBoolean corruptionFlag) {
             List<VaultItem> list = new ArrayList<>();
             String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getReadableDatabase(passphrase);
-            Cursor c = db.query(TABLE_ITEMS, null, null, null, null, null, null);
-            while (c.moveToNext()) {
-                String id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID));
-                String title = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE)), id + "|title");
-                String cat = c.getString(c.getColumnIndexOrThrow(COLUMN_CATEGORY));
-                String user = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_USERNAME)), id + "|username");
-                String pass = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_PASSWORD)), id + "|password");
-                String notes = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_NOTES)), id + "|notes");
-                String totp = "";
-                int totpIndex = c.getColumnIndex(COLUMN_TOTP);
-                if (totpIndex != -1) {
-                    totp = crypto.decrypt(c.getString(totpIndex), id + "|totp");
+            Cursor c = null;
+            try {
+                c = db.query(TABLE_ITEMS, null, null, null, null, null, null);
+                while (c.moveToNext()) {
+                    String id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID));
+                    try {
+                        String title = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE)), id + "|title");
+                        String cat = c.getString(c.getColumnIndexOrThrow(COLUMN_CATEGORY));
+                        String user = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_USERNAME)), id + "|username");
+                        String pass = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_PASSWORD)), id + "|password");
+                        String notes = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_NOTES)), id + "|notes");
+                        String totp = "";
+                        int totpIndex = c.getColumnIndex(COLUMN_TOTP);
+                        if (totpIndex != -1) {
+                            totp = crypto.decrypt(c.getString(totpIndex), id + "|totp");
+                        }
+                        String website = "";
+                        int websiteIndex = c.getColumnIndex(COLUMN_WEBSITE);
+                        if (websiteIndex != -1) {
+                            website = crypto.decrypt(c.getString(websiteIndex), id + "|website");
+                        }
+                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website));
+                    } catch (Exception perRow) {
+                        // یک رکورد خراب نباید جلوی خواندن بقیه‌ی رکوردها را بگیرد؛
+                        // فقط با پرچم خطا ادامه می‌دهیم تا UI اطلاع‌رسانی کند.
+                        if (corruptionFlag != null) corruptionFlag.set(true);
+                    }
                 }
-                String website = "";
-                int websiteIndex = c.getColumnIndex(COLUMN_WEBSITE);
-                if (websiteIndex != -1) {
-                    website = crypto.decrypt(c.getString(websiteIndex), id + "|website");
-                }
-                list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website));
+            } finally {
+                if (c != null) c.close();
             }
-            c.close();
             return list;
         }
 
         public void deleteItem(String id) {
             String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase(passphrase);
             db.delete(TABLE_ITEMS, COLUMN_ID + "=?", new String[]{id});
         }
@@ -213,10 +228,11 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 String q = query.toLowerCase();
                 for (VaultItem it : fullList) {
-                    if (it.getTitle().toLowerCase().contains(q) ||
-                        it.getUsername().toLowerCase().contains(q) ||
-                        it.getCategory().toLowerCase().contains(q) ||
-                        it.getNotes().toLowerCase().contains(q)) {
+                    if (containsIgnoreCase(it.getTitle(), q) ||
+                        containsIgnoreCase(it.getUsername(), q) ||
+                        containsIgnoreCase(it.getCategory(), q) ||
+                        containsIgnoreCase(it.getNotes(), q) ||
+                        containsIgnoreCase(it.getWebsite(), q)) {
                         displayList.add(it);
                     }
                 }
@@ -316,7 +332,7 @@ public class MainActivity extends AppCompatActivity {
                     holder.tvTotpDisplay.postDelayed(() -> {
                         revealedTotpItemIds.remove(item.getId());
                         notifyDataSetChanged();
-                    }, 5000);
+                    }, 5000L);
                 });
             } else {
                 holder.tvTotpDisplay.setVisibility(View.GONE);
@@ -329,6 +345,13 @@ public class MainActivity extends AppCompatActivity {
             holder.card.setOnClickListener(v -> {
                 if (listener != null) listener.onItemClick(item);
             });
+        }
+
+        public boolean hasTotpItems() {
+            for (VaultItem it : displayList) {
+                if (it.getTotpSecret() != null && !it.getTotpSecret().trim().isEmpty()) return true;
+            }
+            return false;
         }
 
         @Override
@@ -368,12 +391,22 @@ public class MainActivity extends AppCompatActivity {
     private boolean isPersian = false;
     private SharedPreferences prefs;
 
+    private static final long AUTO_LOCK_DELAY_MS = 30 * 1000L; // قفل خودکار پس از ۳۰ ثانیه در پس‌زمینه
+
     private Handler totpHandler = new Handler(Looper.getMainLooper());
+    private final Runnable autoLockRunnable = this::lockVaultNow;
     private Runnable totpRunnable = new Runnable() {
+        private long lastTickSecond = -1;
+
         @Override
         public void run() {
-            if (adapter != null) {
-                adapter.notifyDataSetChanged();
+            long second = System.currentTimeMillis() / 1000;
+            if (adapter != null && adapter.hasTotpItems()) {
+                // فقط وقتی ثانیه‌ی شمارش معکوس عوض شده، لیست را به‌روز کن
+                if (second != lastTickSecond) {
+                    lastTickSecond = second;
+                    adapter.notifyDataSetChanged();
+                }
             }
             totpHandler.postDelayed(this, 1000);
         }
@@ -447,24 +480,42 @@ public class MainActivity extends AppCompatActivity {
         updateLanguageUI();
         updateThemeUI();
         loadVaultData();
+        scheduleAutoLock(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
+    protected void onStart() {
+        super.onStart();
         totpHandler.post(totpRunnable);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        totpHandler.removeCallbacks(totpRunnable);
+        cancelAutoLock();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
+        totpHandler.removeCallbacks(totpRunnable);
+        scheduleAutoLock();
+    }
+
+    private void scheduleAutoLock() {
+        cancelAutoLock();
+        totpHandler.postDelayed(autoLockRunnable, AUTO_LOCK_DELAY_MS);
+    }
+
+    private void cancelAutoLock() {
+        totpHandler.removeCallbacks(autoLockRunnable);
+    }
+
+    /**
+     * قفل فوری نشست (مثلاً هنگام ورود به پس‌زمینه)؛
+     * کلید از حافظه پاک و کاربر به صفحه‌ی احراز هویت برمی‌گردد.
+     */
+    private void lockVaultNow() {
+        if (isFinishing() || isChangingConfigurations()) return;
         VaultSession.clear();
+        Intent intent = new Intent(this, AuthActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
         finish();
     }
 
@@ -515,14 +566,33 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadVaultData() {
         new Thread(() -> {
-            List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager);
-            runOnUiThread(() -> {
-                if (adapter != null) adapter.setItems(items);
-            });
+            try {
+                AtomicBoolean corruptionFlag = new AtomicBoolean(false);
+                List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager, corruptionFlag);
+                final boolean hadBrokenRows = corruptionFlag.get();
+                runOnUiThread(() -> {
+                    if (adapter != null) adapter.setItems(items);
+                    if (hadBrokenRows) {
+                        Toast.makeText(this,
+                                isPersian ? "هشدار: برخی از رکوردها قابل خواندن نبودند (احتمال خرابی یا تغییر کلید)."
+                                          : "Warning: some records could not be decrypted (corruption or key change).",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isChangingConfigurations()) {
+                        VaultSession.clear();
+                        Intent intent = new Intent(this, AuthActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+                });
+            }
         }).start();
     }
-
-    private void showAboutSecurityDialog() {
+        private void showAboutSecurityDialog() {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -549,7 +619,7 @@ public class MainActivity extends AppCompatActivity {
             {"رمزنگاری کامل پایگاه داده (SQLCipher)", "تمام فایل پایگاه داده در سطح دیسک با استفاده از الگوریتم ۲۵۶ بیتی SQLCipher رمزنگاری شده است."},
             {"رمزنگاری دو لایه فیلدها", "علاوه بر رمزنگاری فایل پایگاه داده، تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) مجدداً با AES-256-GCM رمزنگاری می‌شوند."},
             {"جداسازی کلید رمز عبور (DEK / KEK)", "کلید داده‌ها (DEK) به‌صورت کاملاً تصادفی ایجاد شده و توسط کلید مشتق‌شده از پسورد شما (KEK با ۶۰۰,۰۰۰ دور PBKDF2) محافظت می‌شود."},
-            {"محدودیت تلاش‌های ناموفق", "پس از ۵ بار وارد کردن رمز اشتباه، برنامه به مدت ۵ دقیقه قفل می‌شود تا از حدس‌زنی خودکار رمز جلوگیری شود."},
+            {"حذف کامل داده‌ها پس از ۳ تلاش ناموفق", "پس از ۳ بار وارد کردن رمز اشتباه، تمام رمزها، کلیدهای ۲FA و تنظیمات برنامه برای همیشه و به‌صورت غیرقابل بازگشت پاک می‌شوند تا داده‌های شما هرگز به دست مهاجم نیفتد."},
             {"بدون اتصال اینترنت", "برنامه هیچ مجوز اتصال به اینترنت ندارد؛ هیچ داده‌ای هرگز از دستگاه شما خارج نمی‌شود."},
             {"محافظت در برابر اسکرین‌شات", "با فعال‌سازی FLAG_SECURE، امکان اسکرین‌شات یا ضبط صفحه در تمام صفحات حساس برنامه غیرفعال است."}
         };
@@ -558,7 +628,7 @@ public class MainActivity extends AppCompatActivity {
             {"Full Database Encryption (SQLCipher)", "The entire SQLite database file is encrypted at-rest using 256-bit SQLCipher technology."},
             {"Double-Layer Field Encryption", "Beyond database file encryption, sensitive fields (passwords, TOTP secrets, notes) are individually encrypted using AES-256-GCM."},
             {"Key Hierarchy (DEK / KEK)", "Data Encryption Key (DEK) is randomly generated and wrapped using a Key Encryption Key (KEK) derived with 600,000 PBKDF2 iterations."},
-            {"Failed Attempt Lockout", "After 5 incorrect password attempts, the app locks for 5 minutes to prevent automated guessing."},
+            {"Total Wipe After 3 Failed Attempts", "After 3 incorrect master password attempts, all passwords, 2FA keys and app settings are permanently and irreversibly erased, so your data can never fall into an attacker's hands."},
             {"Zero Internet Access", "The app requests no internet permission whatsoever; no data ever leaves your device."},
             {"Screenshot Protection", "FLAG_SECURE is enabled across all sensitive screens, blocking screenshots and screen recording."}
         };
@@ -690,10 +760,35 @@ public class MainActivity extends AppCompatActivity {
 
             String id = existingItem != null ? existingItem.getId() : UUID.randomUUID().toString();
             VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website);
-            dbHelper.insertItem(item, cryptoManager);
-            loadVaultData();
-            dialog.dismiss();
-            Toast.makeText(this, isPersian ? "با موفقیت ذخیره شد" : "Saved successfully", Toast.LENGTH_SHORT).show();
+
+            if (!totp.isEmpty() && !TotpGenerator.isValidSecret(totp)) {
+                Toast.makeText(this, isPersian
+                                ? "کلید TOTP نامعتبر است (باید Base32 و حداقل ۱۶ کاراکتر باشد)"
+                                : "Invalid TOTP secret (must be Base32, min 16 chars)",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            btnSave.setEnabled(false);
+            new Thread(() -> {
+                try {
+                    dbHelper.insertItem(item, cryptoManager);
+                    runOnUiThread(() -> {
+                        if (isFinishing()) return;
+                        dialog.dismiss();
+                        loadVaultData();
+                        Toast.makeText(this, isPersian ? "با موفقیت ذخیره شد" : "Saved successfully", Toast.LENGTH_SHORT).show();
+                    });
+                } catch (Exception e) {
+                    runOnUiThread(() -> {
+                        btnSave.setEnabled(true);
+                        Toast.makeText(this, isPersian
+                                        ? "خطا در ذخیره‌سازی؛ دوباره تلاش کنید"
+                                        : "Save failed; please try again",
+                                Toast.LENGTH_LONG).show();
+                    });
+                }
+            }).start();
         });
 
         dialog.show();
@@ -774,9 +869,28 @@ public class MainActivity extends AppCompatActivity {
         btnDelete.setTextColor(Color.parseColor("#FEE2E2"));
         btnDelete.setOnClickListener(v -> {
             sheet.dismiss();
-            dbHelper.deleteItem(item.getId());
-            loadVaultData();
-            Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle(isPersian ? "حذف رکورد" : "Delete Item")
+                    .setMessage(isPersian
+                            ? "«" + item.getTitle() + "» برای همیشه حذف شود؟ این عمل قابل بازگشت نیست."
+                            : "Delete \"" + item.getTitle() + "\" permanently? This cannot be undone.")
+                    .setPositiveButton(isPersian ? "حذف" : "Delete", (d, w) -> {
+                        new Thread(() -> {
+                            try {
+                                dbHelper.deleteItem(item.getId());
+                                runOnUiThread(() -> {
+                                    loadVaultData();
+                                    Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
+                                });
+                            } catch (Exception e) {
+                                runOnUiThread(() -> Toast.makeText(this,
+                                        isPersian ? "خطا در حذف؛ دوباره تلاش کنید" : "Delete failed; try again",
+                                        Toast.LENGTH_SHORT).show());
+                            }
+                        }).start();
+                    })
+                    .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
+                    .show();
         });
         actionsRow.addView(btnDelete);
 
@@ -962,6 +1076,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private static boolean containsIgnoreCase(String text, String query) {
+        return text != null && text.toLowerCase().contains(query);
+    }
+
     private String generateStrongPassword(int length) {
         final String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+";
         SecureRandom random = new SecureRandom();
@@ -972,3 +1090,6 @@ public class MainActivity extends AppCompatActivity {
         return sb.toString();
     }
 }
+    
+    
+    
