@@ -138,14 +138,15 @@ public class MainActivity extends AppCompatActivity {
             String passphrase = getPassphrase();
             SQLiteDatabase db = getWritableDatabase(passphrase);
             ContentValues cv = new ContentValues();
-            cv.put(COLUMN_ID, item.getId());
-            cv.put(COLUMN_TITLE, crypto.encrypt(item.getTitle()));
+            String id = item.getId();
+            cv.put(COLUMN_ID, id);
+            cv.put(COLUMN_TITLE, crypto.encrypt(item.getTitle(), id + "|title"));
             cv.put(COLUMN_CATEGORY, item.getCategory());
-            cv.put(COLUMN_USERNAME, crypto.encrypt(item.getUsername()));
-            cv.put(COLUMN_PASSWORD, crypto.encrypt(item.getPassword()));
-            cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes()));
-            cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret()));
-            cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite()));
+            cv.put(COLUMN_USERNAME, crypto.encrypt(item.getUsername(), id + "|username"));
+            cv.put(COLUMN_PASSWORD, crypto.encrypt(item.getPassword(), id + "|password"));
+            cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes(), id + "|notes"));
+            cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret(), id + "|totp"));
+            cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite(), id + "|website"));
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
@@ -156,20 +157,20 @@ public class MainActivity extends AppCompatActivity {
             Cursor c = db.query(TABLE_ITEMS, null, null, null, null, null, null);
             while (c.moveToNext()) {
                 String id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID));
-                String title = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE)));
+                String title = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE)), id + "|title");
                 String cat = c.getString(c.getColumnIndexOrThrow(COLUMN_CATEGORY));
-                String user = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_USERNAME)));
-                String pass = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_PASSWORD)));
-                String notes = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_NOTES)));
+                String user = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_USERNAME)), id + "|username");
+                String pass = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_PASSWORD)), id + "|password");
+                String notes = crypto.decrypt(c.getString(c.getColumnIndexOrThrow(COLUMN_NOTES)), id + "|notes");
                 String totp = "";
                 int totpIndex = c.getColumnIndex(COLUMN_TOTP);
                 if (totpIndex != -1) {
-                    totp = crypto.decrypt(c.getString(totpIndex));
+                    totp = crypto.decrypt(c.getString(totpIndex), id + "|totp");
                 }
                 String website = "";
                 int websiteIndex = c.getColumnIndex(COLUMN_WEBSITE);
                 if (websiteIndex != -1) {
-                    website = crypto.decrypt(c.getString(websiteIndex));
+                    website = crypto.decrypt(c.getString(websiteIndex), id + "|website");
                 }
                 list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website));
             }
