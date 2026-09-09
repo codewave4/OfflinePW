@@ -1,8 +1,8 @@
-name: Build and Sign Release APK
+name: Build Signed Release APK
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -10,60 +10,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Setup Gradle 8.4
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.4'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-    # ۱. بازیابی کلید از سکرت
-    - name: Decode Keystore from Secret
-      run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 -d > app/release.keystore
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
-    # ۲. تست تشخیصی وضعیت سکرت پسورد (کاملاً امن: فقط اعلام وضعیت و طول رشته)
-    - name: Debug Secret Check
-      env:
-        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      run: |
-        echo "=== DIAGNOSTIC CHECK ==="
-        if [ -z "$KEYSTORE_PASSWORD" ]; then
-          echo "❌ KEYSTORE_PASSWORD is EMPTY or NOT FOUND in Secrets!"
-        else
-          LEN=${#KEYSTORE_PASSWORD}
-          echo "✅ KEYSTORE_PASSWORD is PRESENT! Length: $LEN characters."
-        fi
-        echo "========================"
+      - name: Build Signed Release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: offlinepw_key
+        run: gradle assembleRelease --stacktrace --no-daemon
 
-    # ۳. بیلد نسخه رسمی Release
-    - name: Build Signed Release APK
-      env:
-        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        KEY_ALIAS: "offlinepw_key"
-      run: |
-        gradle assembleRelease \
-          -PKEYSTORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
-          -PKEY_ALIAS="offlinepw_key" \
-          --stacktrace --no-daemon
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/release.keystore
 
-    # ۴. آماده‌سازی خروجی فایل نصبی
-    - name: Prepare APK Output
-      run: |
-        mkdir -p output_apk
-        cp app/build/outputs/apk/release/*.apk output_apk/OfflinePW_1.0.apk
-
-    # ۵. آپلود فایل نصبی نهایی
-    - name: Upload Signed Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: OfflinePW_1.0_Signed
-        path: output_apk/OfflinePW_1.0.apk
-        if-no-files-found: error
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/*.apk
