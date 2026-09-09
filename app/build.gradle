@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+// اگر فایل امضای release (که فقط در CI از secrets ساخته می‌شود) موجود نباشد،
+// بیلد محلی بدون نیاز به keystore کار می‌کند (فقط امضای debug).
+def keystoreExists = file("release.keystore").exists()
+
 android {
     namespace 'com.offlinepw.vault'
     compileSdk 34
@@ -16,23 +20,25 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("release.keystore")
-            storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
-            keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "offlinepw_key"
-            keyPassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
-            v1SigningEnabled true
-            v2SigningEnabled true
+            if (keystoreExists) {
+                storeFile file("release.keystore")
+                storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "offlinepw_key"
+                keyPassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
         }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release
+            signingConfig keystoreExists ? signingConfigs.release : null
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            signingConfig signingConfigs.release
+            // امضای debug پیش‌فرض اندروید؛ بدون نیاز به keystore رلیز
         }
     }
 
@@ -47,7 +53,7 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     implementation 'net.zetetic:android-database-sqlcipher:4.5.4'
+    // sqlcipher 4.5+ برای کامپایل به androidx.sqlite (SupportSQLite*) نیاز دارد
     implementation 'androidx.sqlite:sqlite:2.4.0'
 }
