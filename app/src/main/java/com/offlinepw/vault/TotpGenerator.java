@@ -3,12 +3,37 @@ package com.offlinepw.vault;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 public class TotpGenerator {
 
     private static final String BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+    /**
+     * اعتبارسنجی و نرمال‌سازی یک کلید Base32.
+     *
+     * @return رشته‌ی پاک‌سازی‌شده (بدون فاصله/خط تیره، حروف بزرگ، بدون padding) یا null اگر نامعتبر باشد.
+     */
+    public static String normalizeSecret(String secret) {
+        if (secret == null) return null;
+        String cleaned = secret.trim().toUpperCase()
+                .replace("=", "")
+                .replace(" ", "")
+                .replace("-", "");
+        if (cleaned.isEmpty()) return "";
+        for (char c : cleaned.toCharArray()) {
+            if (BASE32_CHARS.indexOf(c) < 0) return null;
+        }
+        // RFC 4226: کلید باید حداقل 128 بیت (26 کاراکتر Base32) باشد
+        if (cleaned.length() < 16) return null;
+        return cleaned;
+    }
+
+    public static boolean isValidSecret(String secret) {
+        return normalizeSecret(secret) != null;
+    }
 
     public static String generateCode(String secretBase32) {
         if (secretBase32 == null || secretBase32.trim().isEmpty()) {
@@ -39,8 +64,9 @@ public class TotpGenerator {
     }
 
     private static byte[] base32Decode(String input) {
-        if (input == null) return new byte[0];
-        String cleaned = input.trim().toUpperCase().replace("=", "").replace(" ", "");
+        String cleaned = normalizeSecret(input);
+        if (cleaned == null) return new byte[0];
+
         byte[] result = new byte[cleaned.length() * 5 / 8];
         int buffer = 0, bitsLeft = 0, index = 0;
         for (char c : cleaned.toCharArray()) {
