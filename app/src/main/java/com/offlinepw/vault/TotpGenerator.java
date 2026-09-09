@@ -1,54 +1,53 @@
 package com.offlinepw.vault;
 
+import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 public class TotpGenerator {
-    private static final int TIME_STEP_SECONDS = 30;
-    private static final int CODE_DIGITS = 6;
-    private static final String HMAC_ALGORITHM = "HmacSHA1";
+
     private static final String BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-    public static String generateCode(String base32Secret) {
-        try {
-            byte[] key = base32Decode(base32Secret);
-            if (key.length == 0) return "------";
-            long timeCounter = System.currentTimeMillis() / 1000L / TIME_STEP_SECONDS;
-            byte[] counterBytes = new byte[8];
-            for (int i = 7; i >= 0; i--) {
-                counterBytes[i] = (byte) (timeCounter & 0xff);
-                timeCounter >>= 8;
-            }
-            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(new SecretKeySpec(key, HMAC_ALGORITHM));
-            byte[] hash = mac.doFinal(counterBytes);
-            int offset = hash[hash.length - 1] & 0xf;
-            int binaryCode =
-                    ((hash[offset] & 0x7f) << 24) |
-                    ((hash[offset + 1] & 0xff) << 16) |
-                    ((hash[offset + 2] & 0xff) << 8) |
-                    (hash[offset + 3] & 0xff);
-            int otp = binaryCode % (int) Math.pow(10, CODE_DIGITS);
-            return String.format("%0" + CODE_DIGITS + "d", otp);
-        } catch (Exception e) {
+    public static String generateCode(String secretBase32) {
+        if (secretBase32 == null || secretBase32.trim().isEmpty()) {
             return "------";
         }
-    }
+        try {
+            byte[] key = base32Decode(secretBase32);
+            if (key.length == 0) return "------";
 
-    public static int getSecondsRemaining() {
-        long epochSeconds = System.currentTimeMillis() / 1000L;
-        return TIME_STEP_SECONDS - (int) (epochSeconds % TIME_STEP_SECONDS);
+            long timeStep = System.currentTimeMillis() / 1000 / 30;
+            byte[] data = ByteBuffer.allocate(8).putLong(timeStep).array();
+
+            Mac mac = Mac.getInstance("HmacSHA1");
+            mac.init(new SecretKeySpec(key, "RAW"));
+            byte[] hash = mac.doFinal(data);
+
+            int offset = hash[hash.length - 1] & 0x0F;
+            int binary = ((hash[offset] & 0x7F) << 24)
+                    | ((hash[offset + 1] & 0xFF) << 16)
+                    | ((hash[offset + 2] & 0xFF) << 8)
+                    | (hash[offset + 3] & 0xFF);
+
+            int otp = binary % 1000000;
+            return String.format("%06d", otp);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            return "------";
+        }
     }
 
     private static byte[] base32Decode(String input) {
         if (input == null) return new byte[0];
         String cleaned = input.trim().toUpperCase().replace("=", "").replace(" ", "");
-        int byteCount = cleaned.length() * 5 / 8;
-        byte[] result = new byte[byteCount];
+        byte[] result = new byte[cleaned.length() * 5 / 8];
         int buffer = 0, bitsLeft = 0, index = 0;
         for (char c : cleaned.toCharArray()) {
             int val = BASE32_CHARS.indexOf(c);
-            if (val < 0) continue;
+            if (val < 0) {
+                return new byte[0];
+            }
             buffer = (buffer << 5) | val;
             bitsLeft += 5;
             if (bitsLeft >= 8) {
@@ -56,6 +55,6 @@ public class TotpGenerator {
                 bitsLeft -= 8;
             }
         }
-        return result;
+        return java.util.Arrays.copyOf(result, index);
     }
 }
