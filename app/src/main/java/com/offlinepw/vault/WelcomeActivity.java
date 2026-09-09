@@ -85,8 +85,8 @@ public class WelcomeActivity extends AppCompatActivity {
         }
         if (tvWelcomeBody != null) {
             tvWelcomeBody.setText(isPersian ?
-                    "امنیت داده های شما بر پایه ی رمزنگاری استاندارد صنعتی (AES-256) و کلید سخت افزاری گوشی شماست. برای بالاترین سطح امنیت، توصیه میشود رمز عبور مستری ترکیبی از حروف بزرگ، حروف کوچک، عدد و نماد انتخاب کنید.\n\nOfflinePW کاملاً متنباز (Open Source) است و میتوانید تمام کدهای آن را بررسی کنید." :
-                    "Your data is protected by industry-standard encryption (AES-256) and your device's secure hardware key. For maximum security, we recommend choosing a master password that combines uppercase, lowercase, numbers, and symbols.\n\nOfflinePW is fully open-source; you can review every line of its code.");
+                    "امنیت داده های شما بر پایه ی رمزنگاری استاندارد صنعتی (AES-256) و رمز عبور مستری است که تنها خودتان می‌دانید. برای بالاترین سطح امنیت، توصیه میشود رمز عبور مستری ترکیبی از حروف بزرگ، حروف کوچک، عدد و نماد انتخاب کنید.\\n\\nتوجه: پس از ۳ بار ورود رمز اشتباه، تمام داده‌ها برای همیشه پاک می‌شوند.\\n\\nOfflinePW کاملاً متنباز (Open Source) است و میتوانید تمام کدهای آن را بررسی کنید." :
+                    "Your data is protected by industry-standard encryption (AES-256) and the master password that only you know. For maximum security, we recommend choosing a master password that combines uppercase, lowercase, numbers, and symbols.\\n\\nNote: after 3 wrong attempts, all data is permanently erased.\\n\\nOfflinePW is fully open-source; you can review every line of its code.");
         }
         if (btnWelcomeContinue != null) {
             btnWelcomeContinue.setText(isPersian ? "ادامه" : "Continue");
