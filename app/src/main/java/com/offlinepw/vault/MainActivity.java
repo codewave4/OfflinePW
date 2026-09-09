@@ -8,8 +8,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
+import net.sqlcipher.database.SQLiteDatabase;
+import net.sqlcipher.database.SQLiteOpenHelper;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -101,6 +101,12 @@ public class MainActivity extends AppCompatActivity {
             super(context, "offline_pw_vault.db", null, 3);
         }
 
+        private String getPassphrase() {
+            javax.crypto.SecretKey dek = com.offlinepw.vault.crypto.VaultSession.getDek();
+            if (dek == null) return "";
+            return android.util.Base64.encodeToString(dek.getEncoded(), android.util.Base64.NO_WRAP);
+        }
+
         @Override
         public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE " + TABLE_ITEMS + " (" +
@@ -129,7 +135,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void insertItem(VaultItem item, CryptoManager crypto) {
-            SQLiteDatabase db = getWritableDatabase();
+            String passphrase = getPassphrase();
+            SQLiteDatabase db = getWritableDatabase(passphrase);
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_ID, item.getId());
             cv.put(COLUMN_TITLE, crypto.encrypt(item.getTitle()));
@@ -144,7 +151,8 @@ public class MainActivity extends AppCompatActivity {
 
         public List<VaultItem> getAllDecryptedItems(CryptoManager crypto) {
             List<VaultItem> list = new ArrayList<>();
-            SQLiteDatabase db = getReadableDatabase();
+            String passphrase = getPassphrase();
+            SQLiteDatabase db = getReadableDatabase(passphrase);
             Cursor c = db.query(TABLE_ITEMS, null, null, null, null, null, null);
             while (c.moveToNext()) {
                 String id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID));
@@ -167,6 +175,12 @@ public class MainActivity extends AppCompatActivity {
             }
             c.close();
             return list;
+        }
+
+        public void deleteItem(String id) {
+            String passphrase = getPassphrase();
+            SQLiteDatabase db = getWritableDatabase(passphrase);
+            db.delete(TABLE_ITEMS, COLUMN_ID + "=?", new String[]{id});
         }
     }
 
@@ -374,6 +388,8 @@ public class MainActivity extends AppCompatActivity {
         isDarkMode = prefs.getBoolean("is_dark_mode", true);
         isPersian = prefs.getBoolean("is_persian", false);
 
+        SQLiteDatabase.loadLibs(this);
+
         cryptoManager = new CryptoManager(this);
         dbHelper = new VaultDatabaseHelper(this);
 
@@ -529,18 +545,18 @@ public class MainActivity extends AppCompatActivity {
         root.addView(divider);
 
         String[][] itemsFa = {
-            {"رمزنگاری کامل داده‌ها", "تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) با AES-256-GCM رمزنگاری می‌شوند و به‌صورت رمزشده در دستگاه ذخیره می‌گردند."},
-            {"کلید سخت‌افزاری دستگاه", "کلید اصلی رمزنگاری در ماژول امنیتی سخت‌افزار گوشی (StrongBox یا TEE) ساخته و نگهداری می‌شود و هرگز به‌صورت متن ساده در برنامه ذخیره نمی‌شود."},
-            {"رمز عبور مستر مقاوم در برابر حدس‌زنی", "رمز عبور مستر با الگوریتم PBKDF2 و ۱۲۰,۰۰۰ تکرار به همراه یک salt تصادفی و منحصربه‌فرد برای هر نصب، هش می‌شود. خود رمز هرگز ذخیره نمی‌شود."},
+            {"رمزنگاری کامل پایگاه داده (SQLCipher)", "تمام فایل پایگاه داده در سطح دیسک با استفاده از الگوریتم ۲۵۶ بیتی SQLCipher رمزنگاری شده است."},
+            {"رمزنگاری دو لایه فیلدها", "علاوه بر رمزنگاری فایل پایگاه داده، تمام فیلدهای حساس (رمز عبور، کلید TOTP، یادداشت) مجدداً با AES-256-GCM رمزنگاری می‌شوند."},
+            {"جداسازی کلید رمز عبور (DEK / KEK)", "کلید داده‌ها (DEK) به‌صورت کاملاً تصادفی ایجاد شده و توسط کلید مشتق‌شده از پسورد شما (KEK با ۶۰۰,۰۰۰ دور PBKDF2) محافظت می‌شود."},
             {"محدودیت تلاش‌های ناموفق", "پس از ۵ بار وارد کردن رمز اشتباه، برنامه به مدت ۵ دقیقه قفل می‌شود تا از حدس‌زنی خودکار رمز جلوگیری شود."},
             {"بدون اتصال اینترنت", "برنامه هیچ مجوز اتصال به اینترنت ندارد؛ هیچ داده‌ای هرگز از دستگاه شما خارج نمی‌شود."},
             {"محافظت در برابر اسکرین‌شات", "با فعال‌سازی FLAG_SECURE، امکان اسکرین‌شات یا ضبط صفحه در تمام صفحات حساس برنامه غیرفعال است."}
         };
 
         String[][] itemsEn = {
-            {"Full Data Encryption", "All sensitive fields (passwords, TOTP secrets, notes) are encrypted with AES-256-GCM and stored encrypted on your device."},
-            {"Hardware-Backed Key", "The master encryption key is generated and held inside your device's secure hardware module (StrongBox or TEE) and is never stored as plain text in the app."},
-            {"Brute-Force Resistant Master Password", "Your master password is hashed using PBKDF2 with 120,000 iterations and a unique random salt per installation. The password itself is never stored."},
+            {"Full Database Encryption (SQLCipher)", "The entire SQLite database file is encrypted at-rest using 256-bit SQLCipher technology."},
+            {"Double-Layer Field Encryption", "Beyond database file encryption, sensitive fields (passwords, TOTP secrets, notes) are individually encrypted using AES-256-GCM."},
+            {"Key Hierarchy (DEK / KEK)", "Data Encryption Key (DEK) is randomly generated and wrapped using a Key Encryption Key (KEK) derived with 600,000 PBKDF2 iterations."},
             {"Failed Attempt Lockout", "After 5 incorrect password attempts, the app locks for 5 minutes to prevent automated guessing."},
             {"Zero Internet Access", "The app requests no internet permission whatsoever; no data ever leaves your device."},
             {"Screenshot Protection", "FLAG_SECURE is enabled across all sensitive screens, blocking screenshots and screen recording."}
@@ -757,7 +773,7 @@ public class MainActivity extends AppCompatActivity {
         btnDelete.setTextColor(Color.parseColor("#FEE2E2"));
         btnDelete.setOnClickListener(v -> {
             sheet.dismiss();
-            dbHelper.getWritableDatabase().delete(VaultDatabaseHelper.TABLE_ITEMS, VaultDatabaseHelper.COLUMN_ID + "=?", new String[]{item.getId()});
+            dbHelper.deleteItem(item.getId());
             loadVaultData();
             Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
         });
