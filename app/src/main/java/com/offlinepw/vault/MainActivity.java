@@ -938,9 +938,26 @@ public class MainActivity extends AppCompatActivity {
         }
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         ClipData clip = ClipData.newPlainText(label, text);
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            android.os.PersistableBundle extras = new android.os.PersistableBundle();
+            extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+            clip.getDescription().setExtras(extras);
+        }
+
         if (clipboard != null) {
             clipboard.setPrimaryClip(clip);
             Toast.makeText(this, label + (isPersian ? " کپی شد" : " copied"), Toast.LENGTH_SHORT).show();
+
+            final String copiedText = text;
+            final ClipboardManager clipboardRef = clipboard;
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                ClipData current = clipboardRef.getPrimaryClip();
+                if (current != null && current.getItemCount() > 0 &&
+                        copiedText.equals(String.valueOf(current.getItemAt(0).getText()))) {
+                    clipboardRef.setPrimaryClip(ClipData.newPlainText("", ""));
+                }
+            }, 45000);
         }
     }
 
