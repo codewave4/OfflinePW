@@ -29,7 +29,7 @@
                     android:id="@+id/tvAppTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="OFFLINEPW"
+                    android:text="OfflinePW"
                     android:textColor="#F4F4F5"
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
