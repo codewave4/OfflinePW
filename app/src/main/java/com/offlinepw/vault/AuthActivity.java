@@ -1,11 +1,11 @@
 package com.offlinepw.vault;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Base64;
+import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
@@ -15,9 +15,9 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.offlinepw.vault.crypto.VaultSession;
+import java.io.File;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
-import java.util.Locale;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -27,14 +27,20 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 public class AuthActivity extends AppCompatActivity {
-    private static final int MIN_PASSWORD_LENGTH = 6;
+    private static final int MIN_PASSWORD_LENGTH = 10;
+
+    // سیاست امنیتی جدید: ۳ بار رمز اشتباه = پاک شدن کامل و غیرقابل بازگشت همه‌ی داده‌ها.
+    // شمارنده تا زمانی که رمز درست وارد نشود (یا wipe رخ ندهد) در SharedPreferences
+    // باقی می‌ماند و با ری‌استارت برنامه یا چرخش صفحه ریست نمی‌شود.
+    private static final int MAX_FAILED_ATTEMPTS = 3;
+
     private static final String PREF_AUTH = "OfflinePW_Auth";
     private static final String PREF_SETTINGS = "OfflinePW_Prefs";
+    private static final String DB_NAME = "offline_pw_vault.db";
     private static final String KEY_IS_SETUP = "pin_is_setup";
     private static final String KEY_KEK_SALT = "kek_salt";
     private static final String KEY_WRAPPED_DEK = "wrapped_dek";
     private static final String KEY_FAILED_ATTEMPTS = "failed_attempts";
-    private static final String KEY_LOCKOUT_UNTIL = "lockout_until";
 
     private static final int PBKDF2_ITERATIONS = 600000;
     private static final int KEK_LENGTH_BITS = 256;
@@ -42,14 +48,11 @@ public class AuthActivity extends AppCompatActivity {
     private static final int SALT_LENGTH_BYTES = 16;
     private static final int GCM_TAG_LENGTH = 128;
     private static final int IV_LENGTH = 12;
-    private static final int LOCKOUT_THRESHOLD = 5;
-    private static final long LOCKOUT_DURATION_MS = 5 * 60 * 1000L;
 
     private SharedPreferences authPrefs;
     private SharedPreferences settingsPrefs;
     private TextView tvAuthPrompt;
     private TextView tvAuthWarning;
-    private TextView tvLockoutTimer;
     private TextInputLayout tilMasterPassword;
     private TextInputEditText etMasterPassword;
     private MaterialButton btnUnlock;
@@ -58,8 +61,8 @@ public class AuthActivity extends AppCompatActivity {
     private String tempPasswordToConfirm = null;
     private boolean isPersian = false;
 
-    private final Handler lockoutHandler = new Handler(Looper.getMainLooper());
-    private Runnable lockoutTickRunnable;
+    // جلوگیری از اجرای هم‌زمان چند عملیات unlock
+    private boolean authBusy = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +76,6 @@ public class AuthActivity extends AppCompatActivity {
 
         tvAuthPrompt = findViewById(R.id.tvAuthPrompt);
         tvAuthWarning = findViewById(R.id.tvAuthWarning);
-        tvLockoutTimer = findViewById(R.id.tvLockoutTimer);
         tilMasterPassword = findViewById(R.id.tilMasterPassword);
         etMasterPassword = findViewById(R.id.etMasterPassword);
         btnUnlock = findViewById(R.id.btnUnlock);
@@ -93,9 +95,10 @@ public class AuthActivity extends AppCompatActivity {
 
         if (btnAuthLang != null) {
             btnAuthLang.setOnClickListener(v -> {
+                if (authBusy) return;
                 isPersian = !isPersian;
                 settingsPrefs.edit().putBoolean("is_persian", isPersian).apply();
-                if (!isLockedOut()) updateTexts();
+                updateTexts();
             });
         }
 
@@ -114,7 +117,6 @@ public class AuthActivity extends AppCompatActivity {
         }
 
         updateTexts();
-        checkLockoutState();
     }
 
     private void updateTexts() {
@@ -122,16 +124,10 @@ public class AuthActivity extends AppCompatActivity {
             btnAuthLang.setText(isPersian ? "FA" : "EN");
         }
 
-        if (tvAuthWarning != null) {
-            tvAuthWarning.setText(isPersian ?
-                    "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است." :
-                    "Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible.");
-        }
-
         if (tvAuthPrompt != null) {
             if (isSettingUpPin) {
                 if (tempPasswordToConfirm == null) {
-                    tvAuthPrompt.setText(isPersian ? "یک رمز عبور مستر تعیین کنید (حداقل ۶ کاراکتر)" : "Create a Master Password (min 6 characters)");
+                    tvAuthPrompt.setText(isPersian ? ("یک رمز عبور مستر تعیین کنید (حداقل " + MIN_PASSWORD_LENGTH + " کاراکتر)") : ("Create a Master Password (min " + MIN_PASSWORD_LENGTH + " characters)"));
                 } else {
                     tvAuthPrompt.setText(isPersian ? "تکرار رمز عبور برای تأیید:" : "Confirm your Master Password:");
                 }
@@ -143,16 +139,43 @@ public class AuthActivity extends AppCompatActivity {
         if (tilMasterPassword != null) {
             tilMasterPassword.setHint(isPersian ? "رمز عبور مستر" : "Master Password");
         }
-        if (btnUnlock != null) {
-            btnUnlock.setText(isPersian ? "باز کردن" : "Unlock");
+        setUnlockButtonBusy(false);
+
+        updateWarningText();
+    }
+
+    /**
+     * هشدار بالای صفحه: اگر تلاش ناموفقی ثبت شده باشد، باقی‌مانده‌ی تلاش‌ها تا wipe
+     * نمایش داده می‌شود؛ وگرنه پیام پیش‌فرض (غیرقابل بازیابی بودن رمز + سیاست پاک‌سازی).
+     */
+    private void updateWarningText() {
+        if (tvAuthWarning == null) return;
+        int failed = getFailedAttempts();
+
+        if (failed >= MAX_FAILED_ATTEMPTS) {
+            tvAuthWarning.setVisibility(View.GONE);
+            return;
         }
 
-        if (etMasterPassword != null) etMasterPassword.setText("");
-        showUnlockedUi();
+        tvAuthWarning.setVisibility(View.VISIBLE);
+        if (failed > 0) {
+            int remaining = MAX_FAILED_ATTEMPTS - failed;
+            tvAuthWarning.setText(isPersian
+                    ? ("هشدار امنیتی: تنها " + remaining + " تلاش دیگر باقی مانده است.\nپس از آن، تمام رمزها و داده‌های برنامه برای همیشه پاک می‌شوند!")
+                    : ("SECURITY WARNING: only " + remaining + " more attempt" + (remaining == 1 ? "" : "s") + " left.\nAfter that, ALL passwords and data in this app will be permanently erased!"));
+        } else {
+            tvAuthWarning.setText(isPersian
+                    ? "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است.\nتوجه: ۳ بار ورود رمز اشتباه = پاک شدن کامل همه‌ی داده‌ها."
+                    : "Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible.\nNote: 3 wrong attempts = ALL data will be permanently erased.");
+        }
+    }
+
+    private int getFailedAttempts() {
+        return authPrefs.getInt(KEY_FAILED_ATTEMPTS, 0);
     }
 
     private void attemptSubmit() {
-        if (isLockedOut() || etMasterPassword == null) return;
+        if (authBusy || etMasterPassword == null) return;
         String entered = etMasterPassword.getText() != null ? etMasterPassword.getText().toString() : "";
 
         if (isSettingUpPin) {
@@ -164,6 +187,7 @@ public class AuthActivity extends AppCompatActivity {
             }
             if (tempPasswordToConfirm == null) {
                 tempPasswordToConfirm = entered;
+                if (etMasterPassword != null) etMasterPassword.setText("");
                 updateTexts();
             } else {
                 if (tempPasswordToConfirm.equals(entered)) {
@@ -171,63 +195,173 @@ public class AuthActivity extends AppCompatActivity {
                 } else {
                     Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "Passwords do not match, try again", Toast.LENGTH_SHORT).show();
                     tempPasswordToConfirm = null;
+                    if (etMasterPassword != null) etMasterPassword.setText("");
                     updateTexts();
                 }
             }
         } else {
-            attemptUnwrapDek(entered);
+            attemptUnlockAsync(entered);
         }
+    }
+
+    /**
+     * هنگام مشغول بودن عملیات سنگین (PBKDF2 روی ترد پس‌زمینه)، دکمه غیرفعال
+     * می‌شود و متن آن حالت «در حال بررسی» می‌گیرد تا کاربر بداند اپ در حال کار است
+     * و هم‌زمان صفحه هم فریز نشود.
+     */
+    private void setUnlockButtonBusy(boolean busy) {
+        authBusy = busy;
+        if (btnUnlock == null) return;
+        btnUnlock.setEnabled(!busy);
+        btnUnlock.setText(busy
+                ? (isPersian ? "در حال بررسی..." : "Checking...")
+                : (isPersian ? "باز کردن" : "Unlock"));
     }
 
     private void createNewVaultKey(String password) {
-        try {
-            byte[] salt = generateRandomBytes(SALT_LENGTH_BYTES);
-            SecretKey kek = deriveKek(password, salt);
+        setUnlockButtonBusy(true);
+        new Thread(() -> {
+            try {
+                byte[] salt = generateRandomBytes(SALT_LENGTH_BYTES);
+                SecretKey kek = deriveKek(password, salt);
 
-            KeyGenerator dekGen = KeyGenerator.getInstance("AES");
-            dekGen.init(DEK_LENGTH_BITS, new SecureRandom());
-            SecretKey dek = dekGen.generateKey();
+                KeyGenerator dekGen = KeyGenerator.getInstance("AES");
+                dekGen.init(DEK_LENGTH_BITS, new SecureRandom());
+                final SecretKey dek = dekGen.generateKey();
 
-            String wrappedDek = wrapDek(dek, kek);
+                final String wrappedDek = wrapDek(dek, kek);
 
-            authPrefs.edit()
-                    .putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-                    .putString(KEY_WRAPPED_DEK, wrappedDek)
-                    .putBoolean(KEY_IS_SETUP, true)
-                    .putInt(KEY_FAILED_ATTEMPTS, 0)
-                    .putLong(KEY_LOCKOUT_UNTIL, 0)
-                    .apply();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    authPrefs.edit()
+                            .putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                            .putString(KEY_WRAPPED_DEK, wrappedDek)
+                            .putBoolean(KEY_IS_SETUP, true)
+                            .putInt(KEY_FAILED_ATTEMPTS, 0)
+                            .apply();
 
-            VaultSession.setDek(dek);
-            Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
-            proceedToMain();
-        } catch (Exception e) {
-            Toast.makeText(this, isPersian ? "خطا در ساخت کلید امن" : "Error creating secure key", Toast.LENGTH_SHORT).show();
+                    VaultSession.setDek(dek);
+                    setUnlockButtonBusy(false);
+                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
+                    proceedToMain();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setUnlockButtonBusy(false);
+                    Toast.makeText(this, isPersian ? "خطا در ساخت کلید امن" : "Error creating secure key", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    /**
+     * باز کردن قفل: PBKDF2 (۶۰۰k دور) و بازکردن DEK روی ترد پس‌زمینه انجام می‌شود
+     * تا رابط کاربری فریز نشود و اپ بلافاصله پس از آماده‌شدن کلید باز شود.
+     */
+    private void attemptUnlockAsync(String password) {
+        setUnlockButtonBusy(true);
+        new Thread(() -> {
+            try {
+                String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
+                String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
+                if (saltB64.isEmpty() || wrappedDek.isEmpty()) {
+                    throw new IllegalStateException("No vault keys found");
+                }
+                byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
+                SecretKey kek = deriveKek(password, salt);
+                final SecretKey dek = unwrapDek(wrappedDek, kek);
+
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    VaultSession.setDek(dek);
+                    // تنها جایی که شمارنده‌ی تلاش‌ها ریست می‌شود: ورود موفق رمز درست.
+                    authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply();
+                    setUnlockButtonBusy(false);
+                    proceedToMain();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setUnlockButtonBusy(false);
+                    if (etMasterPassword != null) etMasterPassword.setText("");
+                    registerFailedAttempt();
+                });
+            }
+        }).start();
+    }
+
+    /**
+     * ثبت یک تلاش ناموفق.
+     * تلاش‌های ۱ و ۲: فقط اخطار با نمایش تعداد باقی‌مانده.
+     * تلاش سوم: پاک شدن کامل و غیرقابل بازگشت تمام داده‌ها و بازگشت به حالت ساخت رمز جدید.
+     */
+    private void registerFailedAttempt() {
+        int attempts = getFailedAttempts() + 1;
+        authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, attempts).apply();
+
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            wipeVaultAndShowMessage();
+        } else {
+            int remaining = MAX_FAILED_ATTEMPTS - attempts;
+            if (etMasterPassword != null) etMasterPassword.setText("");
+            Toast.makeText(this, isPersian
+                    ? ("رمز اشتباه است! " + remaining + " تلاش دیگر باقی مانده — پس از آن همه‌ی داده‌ها برای همیشه پاک می‌شود.")
+                    : ("Incorrect password! " + remaining + " attempt" + (remaining == 1 ? "" : "s") + " left — after that ALL data will be permanently erased."),
+                    Toast.LENGTH_LONG).show();
+            updateWarningText();
         }
     }
 
-    private void attemptUnwrapDek(String password) {
-        try {
-            String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
-            String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
-            if (saltB64.isEmpty() || wrappedDek.isEmpty()) {
-                registerFailedAttempt();
-                return;
-            }
-            byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
-            SecretKey kek = deriveKek(password, salt);
-            SecretKey dek = unwrapDek(wrappedDek, kek);
+    /**
+     * پاک کردن کامل: دیتابیس ولت، همه‌ی SharedPreferences (رمز/کلیدها/تنظیمات/نشان welcome)
+     * و کلید نشست. بعد از آن برنامه مثل نصب تازه است و کاربر باید رمز مستر جدید بسازد.
+     */
+    private void wipeVaultAndShowMessage() {
+        // زبان کاربر را قبل از پاک‌شدن تنظیمات نگه می‌داریم تا پیام پایانی درست نمایش داده شود.
+        final boolean langPersian = isPersian;
 
-            VaultSession.setDek(dek);
-            authPrefs.edit()
-                    .putInt(KEY_FAILED_ATTEMPTS, 0)
-                    .putLong(KEY_LOCKOUT_UNTIL, 0)
-                    .apply();
-            proceedToMain();
-        } catch (Exception e) {
-            registerFailedAttempt();
-            if (etMasterPassword != null) etMasterPassword.setText("");
+        // ۱) حذف فایل دیتابیس (+ فایل‌های جانبی -wal / -shm / -journal)
+        try {
+            deleteDatabase(DB_NAME);
+        } catch (Exception ignored) {
         }
+        // ۲) حذف هر فایل باقی‌مانده در پوشه‌ی databases (کامل و بی‌دریغ)
+        try {
+            File dbDir = new File(getApplicationInfo().dataDir, "databases");
+            if (dbDir.isDirectory()) {
+                File[] files = dbDir.listFiles();
+                if (files != null) {
+                    for (File f : files) {
+                        if (f != null) f.delete();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        // ۳) پاک کردن همه‌ی SharedPreferences (کلیدها، نشان راه‌اندازی، تنظیمات زبان/تم)
+        authPrefs.edit().clear().commit();
+        settingsPrefs.edit().clear().commit();
+        // ۴) پاک کردن کلید نشست از حافظه
+        VaultSession.clear();
+
+        // ۵) برگشت به حالت «ساخت رمز مستر جدید»
+        isPersian = langPersian;
+        isSettingUpPin = true;
+        tempPasswordToConfirm = null;
+        if (etMasterPassword != null) etMasterPassword.setText("");
+        updateTexts();
+
+        new AlertDialog.Builder(this)
+                .setCancelable(false)
+                .setTitle(langPersian ? "تمام داده‌ها پاک شد" : "All Data Wiped")
+                .setMessage(langPersian
+                        ? "به‌دلیل ۳ بار ورود رمز عبور اشتباه، تمام رمزها، کلیدهای ۲FA و تنظیمات برنامه برای محافظت از شما به‌صورت غیرقابل بازگشت پاک شدند.\n\nبرنامه به حالت اولیه بازگشت؛ حالا باید یک رمز عبور مستر جدید بسازید."
+                        : "Because the master password was entered incorrectly 3 times, all passwords, 2FA keys and app settings have been permanently erased to protect you.\n\nThe app has been reset; you must now create a new master password.")
+                .setPositiveButton(langPersian ? "ساخت رمز جدید" : "Create New Password", (d, w) -> {
+                    if (etMasterPassword != null) etMasterPassword.requestFocus();
+                })
+                .show();
     }
 
     private SecretKey deriveKek(String password, byte[] salt) throws Exception {
@@ -264,83 +398,6 @@ public class AuthActivity extends AppCompatActivity {
         byte[] bytes = new byte[length];
         new SecureRandom().nextBytes(bytes);
         return bytes;
-    }
-
-    private void registerFailedAttempt() {
-        int attempts = authPrefs.getInt(KEY_FAILED_ATTEMPTS, 0) + 1;
-        authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, attempts).apply();
-
-        if (attempts >= LOCKOUT_THRESHOLD) {
-            long lockoutUntil = System.currentTimeMillis() + LOCKOUT_DURATION_MS;
-            authPrefs.edit().putLong(KEY_LOCKOUT_UNTIL, lockoutUntil).apply();
-            checkLockoutState();
-        } else {
-            int remaining = LOCKOUT_THRESHOLD - attempts;
-            Toast.makeText(this, isPersian ?
-                    ("رمز اشتباه است. " + remaining + " تلاش دیگر باقی مانده.") :
-                    ("Incorrect password. " + remaining + " attempts remaining."), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private boolean isLockedOut() {
-        long lockoutUntil = authPrefs.getLong(KEY_LOCKOUT_UNTIL, 0);
-        return System.currentTimeMillis() < lockoutUntil;
-    }
-
-    private void showUnlockedUi() {
-        if (isLockedOut()) return;
-        if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.GONE);
-        if (tilMasterPassword != null) tilMasterPassword.setVisibility(android.view.View.VISIBLE);
-        if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.VISIBLE);
-    }
-
-    private void showLockedUi() {
-        if (tilMasterPassword != null) tilMasterPassword.setVisibility(android.view.View.GONE);
-        if (btnUnlock != null) btnUnlock.setVisibility(android.view.View.GONE);
-        if (tvLockoutTimer != null) tvLockoutTimer.setVisibility(android.view.View.VISIBLE);
-        if (tvAuthPrompt != null) {
-            tvAuthPrompt.setText(isPersian ? "قفل موقت به دلیل تلاشهای ناموفق" : "Locked due to failed attempts");
-        }
-    }
-
-    private void checkLockoutState() {
-        if (lockoutTickRunnable != null) {
-            lockoutHandler.removeCallbacks(lockoutTickRunnable);
-        }
-        if (!isLockedOut()) {
-            authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).putLong(KEY_LOCKOUT_UNTIL, 0).apply();
-            updateTexts();
-            return;
-        }
-        showLockedUi();
-        lockoutTickRunnable = new Runnable() {
-            @Override
-            public void run() {
-                long msLeft = authPrefs.getLong(KEY_LOCKOUT_UNTIL, 0) - System.currentTimeMillis();
-                if (msLeft <= 0) {
-                    authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).putLong(KEY_LOCKOUT_UNTIL, 0).apply();
-                    updateTexts();
-                    return;
-                }
-                long totalSeconds = msLeft / 1000;
-                long minutes = totalSeconds / 60;
-                long seconds = totalSeconds % 60;
-                String countdown = String.format(Locale.US, "%02d:%02d", minutes, seconds);
-                if (tvLockoutTimer != null) {
-                    tvLockoutTimer.setText(countdown);
-                }
-                lockoutHandler.postDelayed(this, 1000);
-            }
-        };
-        lockoutHandler.post(lockoutTickRunnable);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (lockoutTickRunnable != null) {
-            lockoutHandler.removeCallbacks(lockoutTickRunnable);
-        }
     }
 
     private void proceedToMain() {
