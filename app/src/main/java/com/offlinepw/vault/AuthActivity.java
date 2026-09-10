@@ -29,9 +29,9 @@ import javax.crypto.spec.SecretKeySpec;
 public class AuthActivity extends AppCompatActivity {
     private static final int MIN_PASSWORD_LENGTH = 10;
 
-    // سیاست امنیتی جدید: ۳ بار رمز اشتباه = پاک شدن کامل و غیرقابل بازگشت همه‌ی داده‌ها.
+    // سیاست امنیتی جدید: ۳ بار رمز اشتباه = پاک شدن کامل و غیرقابل بازگشت همهی دادهها.
     // شمارنده تا زمانی که رمز درست وارد نشود (یا wipe رخ ندهد) در SharedPreferences
-    // باقی می‌ماند و با ری‌استارت برنامه یا چرخش صفحه ریست نمی‌شود.
+    // باقی میماند و با ریاستارت برنامه یا چرخش صفحه ریست نمیشود.
     private static final int MAX_FAILED_ATTEMPTS = 3;
 
     private static final String PREF_AUTH = "OfflinePW_Auth";
@@ -61,7 +61,7 @@ public class AuthActivity extends AppCompatActivity {
     private String tempPasswordToConfirm = null;
     private boolean isPersian = false;
 
-    // جلوگیری از اجرای هم‌زمان چند عملیات unlock
+    // جلوگیری از اجرای همزمان چند عملیات unlock
     private boolean authBusy = false;
 
     @Override
@@ -145,8 +145,8 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     /**
-     * هشدار بالای صفحه: اگر تلاش ناموفقی ثبت شده باشد، باقی‌مانده‌ی تلاش‌ها تا wipe
-     * نمایش داده می‌شود؛ وگرنه پیام پیش‌فرض (غیرقابل بازیابی بودن رمز + سیاست پاک‌سازی).
+     * هشدار بالای صفحه: اگر تلاش ناموفقی ثبت شده باشد، باقیماندهی تلاشها تا wipe
+     * نمایش داده میشود؛ وگرنه پیام پیشفرض (غیرقابل بازیابی بودن رمز + سیاست پاکسازی).
      */
     private void updateWarningText() {
         if (tvAuthWarning == null) return;
@@ -161,11 +161,11 @@ public class AuthActivity extends AppCompatActivity {
         if (failed > 0) {
             int remaining = MAX_FAILED_ATTEMPTS - failed;
             tvAuthWarning.setText(isPersian
-                    ? ("هشدار امنیتی: تنها " + remaining + " تلاش دیگر باقی مانده است.\nپس از آن، تمام رمزها و داده‌های برنامه برای همیشه پاک می‌شوند!")
+                    ? ("هشدار امنیتی: تنها " + remaining + " تلاش دیگر باقی مانده است.\nپس از آن، تمام رمزها و دادههای برنامه برای همیشه پاک میشوند!")
                     : ("SECURITY WARNING: only " + remaining + " more attempt" + (remaining == 1 ? "" : "s") + " left.\nAfter that, ALL passwords and data in this app will be permanently erased!"));
         } else {
             tvAuthWarning.setText(isPersian
-                    ? "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است.\nتوجه: ۳ بار ورود رمز اشتباه = پاک شدن کامل همه‌ی داده‌ها."
+                    ? "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است.\nتوجه: ۳ بار ورود رمز اشتباه = پاک شدن کامل همهی دادهها."
                     : "Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible.\nNote: 3 wrong attempts = ALL data will be permanently erased.");
         }
     }
@@ -205,9 +205,9 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     /**
-     * هنگام مشغول بودن عملیات سنگین (PBKDF2 روی ترد پس‌زمینه)، دکمه غیرفعال
-     * می‌شود و متن آن حالت «در حال بررسی» می‌گیرد تا کاربر بداند اپ در حال کار است
-     * و هم‌زمان صفحه هم فریز نشود.
+     * هنگام مشغول بودن عملیات سنگین (PBKDF2 روی ترد پسزمینه)، دکمه غیرفعال
+     * میشود و متن آن حالت «در حال بررسی» میگیرد تا کاربر بداند اپ در حال کار است
+     * و همزمان صفحه هم فریز نشود.
      */
     private void setUnlockButtonBusy(boolean busy) {
         authBusy = busy;
@@ -256,8 +256,8 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     /**
-     * باز کردن قفل: PBKDF2 (۶۰۰k دور) و بازکردن DEK روی ترد پس‌زمینه انجام می‌شود
-     * تا رابط کاربری فریز نشود و اپ بلافاصله پس از آماده‌شدن کلید باز شود.
+     * باز کردن قفل: PBKDF2 (۶۰۰k دور) و بازکردن DEK روی ترد پسزمینه انجام میشود
+     * تا رابط کاربری فریز نشود و اپ بلافاصله پس از آمادهشدن کلید باز شود.
      */
     private void attemptUnlockAsync(String password) {
         setUnlockButtonBusy(true);
@@ -275,7 +275,7 @@ public class AuthActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     VaultSession.setDek(dek);
-                    // تنها جایی که شمارنده‌ی تلاش‌ها ریست می‌شود: ورود موفق رمز درست.
+                    // تنها جایی که شمارندهی تلاشها ریست میشود: ورود موفق رمز درست.
                     authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply();
                     setUnlockButtonBusy(false);
                     proceedToMain();
@@ -293,8 +293,8 @@ public class AuthActivity extends AppCompatActivity {
 
     /**
      * ثبت یک تلاش ناموفق.
-     * تلاش‌های ۱ و ۲: فقط اخطار با نمایش تعداد باقی‌مانده.
-     * تلاش سوم: پاک شدن کامل و غیرقابل بازگشت تمام داده‌ها و بازگشت به حالت ساخت رمز جدید.
+     * تلاشهای ۱ و ۲: فقط اخطار با نمایش تعداد باقیمانده.
+     * تلاش سوم: پاک شدن کامل و غیرقابل بازگشت تمام دادهها و بازگشت به حالت ساخت رمز جدید.
      */
     private void registerFailedAttempt() {
         int attempts = getFailedAttempts() + 1;
@@ -306,7 +306,7 @@ public class AuthActivity extends AppCompatActivity {
             int remaining = MAX_FAILED_ATTEMPTS - attempts;
             if (etMasterPassword != null) etMasterPassword.setText("");
             Toast.makeText(this, isPersian
-                    ? ("رمز اشتباه است! " + remaining + " تلاش دیگر باقی مانده — پس از آن همه‌ی داده‌ها برای همیشه پاک می‌شود.")
+                    ? ("رمز اشتباه است! " + remaining + " تلاش دیگر باقی مانده — پس از آن همهی دادهها برای همیشه پاک میشود.")
                     : ("Incorrect password! " + remaining + " attempt" + (remaining == 1 ? "" : "s") + " left — after that ALL data will be permanently erased."),
                     Toast.LENGTH_LONG).show();
             updateWarningText();
@@ -314,19 +314,19 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     /**
-     * پاک کردن کامل: دیتابیس ولت، همه‌ی SharedPreferences (رمز/کلیدها/تنظیمات/نشان welcome)
+     * پاک کردن کامل: دیتابیس ولت، همهی SharedPreferences (رمز/کلیدها/تنظیمات/نشان welcome)
      * و کلید نشست. بعد از آن برنامه مثل نصب تازه است و کاربر باید رمز مستر جدید بسازد.
      */
     private void wipeVaultAndShowMessage() {
-        // زبان کاربر را قبل از پاک‌شدن تنظیمات نگه می‌داریم تا پیام پایانی درست نمایش داده شود.
+        // زبان کاربر را قبل از پاکشدن تنظیمات نگه میداریم تا پیام پایانی درست نمایش داده شود.
         final boolean langPersian = isPersian;
 
-        // ۱) حذف فایل دیتابیس (+ فایل‌های جانبی -wal / -shm / -journal)
+        // ۱) حذف فایل دیتابیس (+ فایلهای جانبی -wal / -shm / -journal)
         try {
             deleteDatabase(DB_NAME);
         } catch (Exception ignored) {
         }
-        // ۲) حذف هر فایل باقی‌مانده در پوشه‌ی databases (کامل و بی‌دریغ)
+        // ۲) حذف هر فایل باقیمانده در پوشهی databases (کامل و بیدریغ)
         try {
             File dbDir = new File(getApplicationInfo().dataDir, "databases");
             if (dbDir.isDirectory()) {
@@ -339,7 +339,7 @@ public class AuthActivity extends AppCompatActivity {
             }
         } catch (Exception ignored) {
         }
-        // ۳) پاک کردن همه‌ی SharedPreferences (کلیدها، نشان راه‌اندازی، تنظیمات زبان/تم)
+        // ۳) پاک کردن همهی SharedPreferences (کلیدها، نشان راهاندازی، تنظیمات زبان/تم)
         authPrefs.edit().clear().commit();
         settingsPrefs.edit().clear().commit();
         // ۴) پاک کردن کلید نشست از حافظه
@@ -352,16 +352,58 @@ public class AuthActivity extends AppCompatActivity {
         if (etMasterPassword != null) etMasterPassword.setText("");
         updateTexts();
 
-        new AlertDialog.Builder(this)
-                .setCancelable(false)
-                .setTitle(langPersian ? "تمام داده‌ها پاک شد" : "All Data Wiped")
-                .setMessage(langPersian
-                        ? "به‌دلیل ۳ بار ورود رمز عبور اشتباه، تمام رمزها، کلیدهای ۲FA و تنظیمات برنامه برای محافظت از شما به‌صورت غیرقابل بازگشت پاک شدند.\n\nبرنامه به حالت اولیه بازگشت؛ حالا باید یک رمز عبور مستر جدید بسازید."
-                        : "Because the master password was entered incorrectly 3 times, all passwords, 2FA keys and app settings have been permanently erased to protect you.\n\nThe app has been reset; you must now create a new master password.")
-                .setPositiveButton(langPersian ? "ساخت رمز جدید" : "Create New Password", (d, w) -> {
-                    if (etMasterPassword != null) etMasterPassword.requestFocus();
-                })
-                .show();
+        com.google.android.material.bottomsheet.BottomSheetDialog sheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(this);
+        sheet.setCancelable(false);
+        sheet.setCanceledOnTouchOutside(false);
+
+        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);
+        root.setPadding(48, 40, 48, 48);
+        root.setBackgroundColor(android.graphics.Color.parseColor("#18181B"));
+
+        android.widget.TextView tvTitle = new android.widget.TextView(this);
+        tvTitle.setText(langPersian ? "تمام دادهها پاک شد" : "All Data Wiped");
+        tvTitle.setTextSize(19f);
+        tvTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvTitle.setTextColor(android.graphics.Color.parseColor("#EF4444"));
+        root.addView(tvTitle);
+
+        android.view.View divider = new android.view.View(this);
+        android.widget.LinearLayout.LayoutParams dividerLp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, 2);
+        dividerLp.topMargin = 16;
+        dividerLp.bottomMargin = 16;
+        divider.setLayoutParams(dividerLp);
+        divider.setBackgroundColor(android.graphics.Color.parseColor("#27272A"));
+        root.addView(divider);
+
+        android.widget.TextView tvMessage = new android.widget.TextView(this);
+        tvMessage.setText(langPersian
+                ? "بهدلیل ۳ بار ورود رمز عبور اشتباه، تمام رمزها، کلیدهای ۲FA و تنظیمات برنامه برای محافظت از شما بهصورت غیرقابل بازگشت پاک شدند.\n\nبرنامه به حالت اولیه بازگشت؛ حالا باید یک رمز عبور مستر جدید بسازید."
+                : "Because the master password was entered incorrectly 3 times, all passwords, 2FA keys and app settings have been permanently erased to protect you.\n\nThe app has been reset; you must now create a new master password.");
+        tvMessage.setTextSize(14f);
+        tvMessage.setLineSpacing(6f, 1f);
+        tvMessage.setTextColor(android.graphics.Color.parseColor("#A1A1AA"));
+        root.addView(tvMessage);
+
+        com.google.android.material.button.MaterialButton btnCreateNew =
+                new com.google.android.material.button.MaterialButton(this);
+        btnCreateNew.setText(langPersian ? "ساخت رمز جدید" : "Create New Password");
+        android.widget.LinearLayout.LayoutParams btnLp = new android.widget.LinearLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = 32;
+        btnCreateNew.setLayoutParams(btnLp);
+        btnCreateNew.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#27272A")));
+        btnCreateNew.setTextColor(android.graphics.Color.parseColor("#F4F4F5"));
+        btnCreateNew.setOnClickListener(v -> {
+            sheet.dismiss();
+            if (etMasterPassword != null) etMasterPassword.requestFocus();
+        });
+        root.addView(btnCreateNew);
+
+        sheet.setContentView(root);
+        sheet.show();
     }
 
     private SecretKey deriveKek(String password, byte[] salt) throws Exception {
