@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="#09090B"
+    android:background="@color/nordic_bg"
     android:padding="24dp">
 
     <LinearLayout
@@ -21,14 +21,14 @@
             android:layout_width="38dp"
             android:layout_height="38dp"
             android:text="?"
-            android:textColor="#F4F4F5"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="14sp"
             android:textStyle="bold"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            app:backgroundTint="#18181B"
+            app:backgroundTint="@color/nordic_tonal_btn_bg"
             app:cornerRadius="12dp"
-            app:strokeColor="#27272A"
+            app:strokeColor="@color/nordic_border"
             app:strokeWidth="1dp" />
 
         <View
@@ -42,19 +42,19 @@
             android:layout_width="wrap_content"
             android:layout_height="38dp"
             android:text="FA"
-            android:textColor="#F4F4F5"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="12sp"
             android:textStyle="bold"
-            app:backgroundTint="#18181B"
+            app:backgroundTint="@color/nordic_tonal_btn_bg"
             app:cornerRadius="12dp"
-            app:strokeColor="#27272A"
+            app:strokeColor="@color/nordic_border"
             app:strokeWidth="1dp" />
     </LinearLayout>
 
     <ImageView
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:src="@drawable/ic_launcher"
+        android:src="@mipmap/ic_launcher"
         android:layout_marginBottom="12dp" />
 
     <TextView
@@ -62,7 +62,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="OfflinePW"
-        android:textColor="#F4F4F5"
+        android:textColor="@color/nordic_text_primary"
         android:textSize="22sp"
         android:textStyle="bold"
         android:layout_marginBottom="6dp" />
@@ -72,7 +72,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Enter your Master Password"
-        android:textColor="#A1A1AA"
+        android:textColor="@color/nordic_text_secondary"
         android:textSize="15sp"
         android:gravity="center"
         android:layout_marginBottom="16dp" />
@@ -95,7 +95,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:passwordToggleEnabled="true"
-        app:passwordToggleTint="#A1A1AA"
+        app:passwordToggleTint="@color/nordic_text_secondary"
         app:boxStrokeColor="#3B82F6"
         app:hintTextColor="#3B82F6"
         android:hint="Master Password">
@@ -105,7 +105,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="textPassword"
-            android:textColor="#F4F4F5"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="16sp"
             android:imeOptions="actionDone" />
     </com.google.android.material.textfield.TextInputLayout>
@@ -119,8 +119,8 @@
         android:text="Unlock"
         android:textSize="15sp"
         android:textStyle="bold"
-        android:textColor="#09090B"
-        app:backgroundTint="#E4E4E7"
+        android:textColor="@color/nordic_primary_btn_text"
+        app:backgroundTint="@color/nordic_primary_btn_bg"
         app:cornerRadius="14dp" />
 
 </LinearLayout>

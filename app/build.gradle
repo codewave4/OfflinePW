@@ -25,7 +25,7 @@ android {
                 storePassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
                 keyAlias System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") ?: "offlinepw_key"
                 keyPassword System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
-                v1SigningEnabled true
+                // با minSdk 26 امضای v1 لازم نیست؛ v2 (و v3) کافی است.
                 v2SigningEnabled true
             }
         }
@@ -34,7 +34,9 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig keystoreExists ? signingConfigs.release : null
+            // اگر keystore رلیز وجود ندارد (بیلد محلی)، release با کلید debug امضا می‌شود
+            // تا خروجی نصب‌پذیر باشد. CI در صورت وجود secrets با کلید واقعی امضا می‌کند.
+            signingConfig keystoreExists ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {

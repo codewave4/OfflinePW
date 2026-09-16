@@ -1,6 +1,5 @@
 package com.offlinepw.vault.crypto;
 
-import android.content.Context;
 import android.util.Base64;
 
 import java.nio.charset.StandardCharsets;
@@ -21,7 +20,7 @@ public class CryptoManager {
     private static final int IV_LENGTH = 12;
     private static final byte FORMAT_VERSION = 0x01;
 
-    public CryptoManager(Context context) {
+    public CryptoManager() {
     }
 
     public static class CryptoException extends Exception {

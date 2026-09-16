@@ -5,13 +5,13 @@
     android:id="@+id/mainRootLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#09090B">
+    android:background="@color/nordic_bg">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#09090B"
+        android:background="@color/nordic_bg"
         app:elevation="0dp">
 
         <androidx.appcompat.widget.Toolbar
@@ -30,7 +30,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="OfflinePW"
-                    android:textColor="#F4F4F5"
+                    android:textColor="@color/nordic_text_primary"
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
                     android:fontFamily="monospace"
@@ -60,9 +60,9 @@
                         android:textSize="13sp"
                         android:textStyle="bold"
                         android:fontFamily="monospace"
-                        android:textColor="#F4F4F5"
-                        app:backgroundTint="#18181B"
-                        app:strokeColor="#27272A"
+                        android:textColor="@color/nordic_text_primary"
+                        app:backgroundTint="@color/nordic_tonal_btn_bg"
+                        app:strokeColor="@color/nordic_border"
                         app:strokeWidth="1dp"
                         app:cornerRadius="10dp"
                         android:layout_marginEnd="6dp" />
@@ -80,9 +80,9 @@
                         android:textSize="11sp"
                         android:textStyle="bold"
                         android:fontFamily="monospace"
-                        android:textColor="#F4F4F5"
-                        app:backgroundTint="#18181B"
-                        app:strokeColor="#27272A"
+                        android:textColor="@color/nordic_text_primary"
+                        app:backgroundTint="@color/nordic_tonal_btn_bg"
+                        app:strokeColor="@color/nordic_border"
                         app:strokeWidth="1dp"
                         app:cornerRadius="10dp"
                         android:layout_marginEnd="6dp" />
@@ -100,9 +100,9 @@
                         android:textSize="11sp"
                         android:textStyle="bold"
                         android:fontFamily="monospace"
-                        android:textColor="#F4F4F5"
-                        app:backgroundTint="#18181B"
-                        app:strokeColor="#27272A"
+                        android:textColor="@color/nordic_text_primary"
+                        app:backgroundTint="@color/nordic_tonal_btn_bg"
+                        app:strokeColor="@color/nordic_border"
                         app:strokeWidth="1dp"
                         app:cornerRadius="10dp" />
                 </LinearLayout>
@@ -117,8 +117,8 @@
             android:layout_marginHorizontal="12dp"
             android:layout_marginBottom="10dp"
             android:hint="جستجو در عنوان، حساب و تگ‌ها..."
-            android:textColorHint="#71717A"
-            android:textColor="#F4F4F5"
+            android:textColorHint="@color/nordic_text_secondary"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="13sp"
             android:paddingHorizontal="14dp"
             android:background="@drawable/bg_search_input" />
@@ -140,8 +140,8 @@
         android:layout_gravity="bottom|end"
         android:layout_margin="20dp"
         android:src="@drawable/ic_add"
-        app:backgroundTint="#F4F4F5"
-        app:tint="#09090B"
+        app:backgroundTint="@color/nordic_text_primary"
+        app:tint="@color/nordic_bg"
         app:elevation="4dp" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,6 +1,5 @@
 package com.offlinepw.vault;
 
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -116,7 +115,27 @@ public class AuthActivity extends AppCompatActivity {
             });
         }
 
+        // اگر در مرحله‌ی «تأیید رمز» بودیم و صفحه چرخید، رمز مرحله اول هرگز در
+        // حافظه‌ی ماندگار ذخیره نمی‌شود (سیاست امنیتی)؛ به‌جای گیج‌کننده بودن،
+        // به کاربر می‌گوییم که پروسه از نو شروع می‌شود.
+        if (savedInstanceState != null && isSettingUpPin
+                && savedInstanceState.getBoolean("setup_confirm_step", false)) {
+            Toast.makeText(this, isPersian
+                    ? "چرخش صفحه، ساخت رمز را قطع کرد؛ لطفاً رمز را دوباره وارد کنید"
+                    : "Screen rotation interrupted password setup; please enter it again",
+                    Toast.LENGTH_SHORT).show();
+        }
+
         updateTexts();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // خودِ رمز هرگز ذخیره نمی‌شود — فقط «در مرحله ۲ بودم» برای پیام UX.
+        if (isSettingUpPin) {
+            outState.putBoolean("setup_confirm_step", tempPasswordToConfirm != null);
+        }
     }
 
     private void updateTexts() {
@@ -316,32 +335,55 @@ public class AuthActivity extends AppCompatActivity {
     /**
      * پاک کردن کامل: دیتابیس ولت، همهی SharedPreferences (رمز/کلیدها/تنظیمات/نشان welcome)
      * و کلید نشست. بعد از آن برنامه مثل نصب تازه است و کاربر باید رمز مستر جدید بسازد.
+     *
+     * دو نکته‌ی مهم در این پیاده‌سازی:
+     *  - بازگشتی هر delete() چک و در انتها presence فایل‌ها verify می‌شود؛ در صورت شکست
+     *    به کاربر هشدار داده می‌شود (دیگر «پاک شد» را بدون تأیید نمی‌گوییم).
+     *  - flag زبان و تم کاربر دوباره ذخیره می‌شود تا بعد از ساخت رمز جدید، UI به‌طور
+     *    ناگهانی به انگلیسی/تیم پیش‌فرض برنگردد.
      */
     private void wipeVaultAndShowMessage() {
-        // زبان کاربر را قبل از پاکشدن تنظیمات نگه میداریم تا پیام پایانی درست نمایش داده شود.
+        // زبان و تم کاربر را قبل از پاکشدن تنظیمات نگه می‌داریم.
         final boolean langPersian = isPersian;
+        final boolean darkMode = settingsPrefs.getBoolean("is_dark_mode", true);
 
-        // ۱) حذف فایل دیتابیس (+ فایلهای جانبی -wal / -shm / -journal)
+        // ۱) حذف فایل دیتابیس (+ فایلهای جانبی -wal / -shm / -journal) با تأیید نتیجه
+        boolean wipeOk = true;
+        File dbDir = null;
         try {
             deleteDatabase(DB_NAME);
         } catch (Exception ignored) {
+            wipeOk = false;
         }
-        // ۲) حذف هر فایل باقیمانده در پوشهی databases (کامل و بیدریغ)
+        // ۲) حذف هر فایل باقیمانده در پوشهی databases
         try {
-            File dbDir = new File(getApplicationInfo().dataDir, "databases");
+            dbDir = new File(getApplicationInfo().dataDir, "databases");
             if (dbDir.isDirectory()) {
                 File[] files = dbDir.listFiles();
                 if (files != null) {
                     for (File f : files) {
-                        if (f != null) f.delete();
+                        if (f != null && !f.delete()) wipeOk = false;
                     }
                 }
             }
         } catch (Exception ignored) {
+            wipeOk = false;
         }
+        // ۲.۱) verify: هیچ اثری از دیتابیس (شامل فایلهای جانبی) باقی نمانده باشد
+        if (dbDir != null) {
+            for (String name : new String[]{DB_NAME, DB_NAME + "-wal", DB_NAME + "-shm", DB_NAME + "-journal"}) {
+                if (new File(dbDir, name).exists()) wipeOk = false;
+            }
+        }
+
         // ۳) پاک کردن همهی SharedPreferences (کلیدها، نشان راهاندازی، تنظیمات زبان/تم)
         authPrefs.edit().clear().commit();
         settingsPrefs.edit().clear().commit();
+        // ۳.۱) زبان و تم کاربر را مجدداً ثبت می‌کنیم تا در ادامه‌ی نشست حفظ شود
+        settingsPrefs.edit()
+                .putBoolean("is_persian", langPersian)
+                .putBoolean("is_dark_mode", darkMode)
+                .apply();
         // ۴) پاک کردن کلید نشست از حافظه
         VaultSession.clear();
 
@@ -379,9 +421,16 @@ public class AuthActivity extends AppCompatActivity {
         root.addView(divider);
 
         android.widget.TextView tvMessage = new android.widget.TextView(this);
-        tvMessage.setText(langPersian
+        String baseMsg = langPersian
                 ? "بهدلیل ۳ بار ورود رمز عبور اشتباه، تمام رمزها، کلیدهای ۲FA و تنظیمات برنامه برای محافظت از شما بهصورت غیرقابل بازگشت پاک شدند.\n\nبرنامه به حالت اولیه بازگشت؛ حالا باید یک رمز عبور مستر جدید بسازید."
-                : "Because the master password was entered incorrectly 3 times, all passwords, 2FA keys and app settings have been permanently erased to protect you.\n\nThe app has been reset; you must now create a new master password.");
+                : "Because the master password was entered incorrectly 3 times, all passwords, 2FA keys and app settings have been permanently erased to protect you.\n\nThe app has been reset; you must now create a new master password.";
+        // اگر verify حذف شکست خورد، صادقانه هشدار می‌دهیم.
+        if (!wipeOk) {
+            baseMsg += "\n\n" + (langPersian
+                    ? "⚠️ هشدار: برخی فایل‌ها تأییدِ حذف نشدند. برای اطمینان کامل، از تنظیمات سیستم > برنامه‌ها، «داده‌های» این برنامه را هم پاک کنید."
+                    : "⚠️ Warning: deletion of some files could not be verified. For complete certainty, also clear this app's data from system settings (Settings > Apps).");
+        }
+        tvMessage.setText(baseMsg);
         tvMessage.setTextSize(14f);
         tvMessage.setLineSpacing(6f, 1f);
         tvMessage.setTextColor(android.graphics.Color.parseColor("#A1A1AA"));
@@ -407,10 +456,15 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     private SecretKey deriveKek(String password, byte[] salt) throws Exception {
-        KeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEK_LENGTH_BITS);
-        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-        byte[] kekBytes = factory.generateSecret(spec).getEncoded();
-        return new SecretKeySpec(kekBytes, "AES");
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEK_LENGTH_BITS);
+        try {
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] kekBytes = factory.generateSecret(spec).getEncoded();
+            return new SecretKeySpec(kekBytes, "AES");
+        } finally {
+            // کاراکترهای رمز را بلافاصله از حافظه پاک می‌کنیم (بهداشت کلید)
+            spec.clearPassword();
+        }
     }
 
     private String wrapDek(SecretKey dek, SecretKey kek) throws Exception {

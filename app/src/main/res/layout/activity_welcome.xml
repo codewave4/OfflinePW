@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#09090B">
+    android:background="@color/nordic_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -24,20 +24,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"
                 android:text="FA"
-                android:textColor="#F4F4F5"
+                android:textColor="@color/nordic_text_primary"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                app:backgroundTint="#18181B"
+                app:backgroundTint="@color/nordic_tonal_btn_bg"
                 app:cornerRadius="12dp"
-                app:strokeColor="#27272A"
+                app:strokeColor="@color/nordic_border"
                 app:strokeWidth="1dp" />
         </LinearLayout>
 
         <ImageView
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:src="@drawable/ic_public"
-            app:tint="#3B82F6"
+            android:src="@mipmap/ic_launcher"
             android:layout_marginBottom="14dp" />
 
         <TextView
@@ -45,7 +44,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Welcome to OfflinePW"
-            android:textColor="#F4F4F5"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="20sp"
             android:textStyle="bold"
             android:gravity="center"
@@ -56,7 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Your security depends entirely on the master password you choose. The stronger and more mixed it is (uppercase, lowercase, numbers, symbols), the harder it becomes to break — you know best how to make it strong.\n\nOfflinePW is fully open-source; you can review every line of its code."
-            android:textColor="#A1A1AA"
+            android:textColor="@color/nordic_text_secondary"
             android:textSize="14sp"
             android:lineSpacingExtra="4dp"
             android:gravity="center"
@@ -67,7 +66,7 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#18181B"
+            android:background="@color/nordic_surface"
             android:padding="12dp"
             android:layout_marginBottom="24dp">
 
@@ -89,7 +88,7 @@
                 android:layout_height="40dp"
                 android:padding="8dp"
                 android:src="@drawable/ic_content_copy"
-                app:tint="#A1A1AA"
+                app:tint="@color/nordic_text_secondary"
                 android:layout_marginStart="8dp" />
         </LinearLayout>
 
@@ -101,8 +100,8 @@
             android:text="Continue"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:textColor="#09090B"
-            app:backgroundTint="#E4E4E7"
+            android:textColor="@color/nordic_primary_btn_text"
+            app:backgroundTint="@color/nordic_primary_btn_bg"
             app:cornerRadius="14dp" />
 
     </LinearLayout>

@@ -26,7 +26,7 @@ public class TotpGenerator {
         for (char c : cleaned.toCharArray()) {
             if (BASE32_CHARS.indexOf(c) < 0) return null;
         }
-        // RFC 4226: کلید باید حداقل 128 بیت (26 کاراکتر Base32) باشد
+        // حداقل 16 کاراکتر Base32 (= 80 بیت)؛ کلیدهای استاندارد TOTP معمولاً 16 تا 32 کاراکترند.
         if (cleaned.length() < 16) return null;
         return cleaned;
     }

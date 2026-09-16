@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+      نام تم "Material3.Dark" تاریخی است؛ parent واقعی DayNight است تا دیالوگ‌های
+      سیستمی (AlertDialog و ...) همیشه با flag تم خودِ اپ (is_dark_mode) هم‌راستا باشند —
+      offlinepw-application این flag را با AppCompatDelegate.setDefaultNightMode
+      همگام می‌کند.
+    -->
     <style name="Theme.Material3.Dark.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="android:statusBarColor">#09090B</item>
-        <item name="android:windowBackground">#09090B</item>
+        <item name="android:statusBarColor">@color/nordic_bg</item>
+        <item name="android:windowBackground">@color/nordic_bg</item>
     </style>
 </resources>

@@ -8,7 +8,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:background="#18181B"
+        android:background="@color/nordic_surface"
         android:padding="24dp">
 
         <TextView
@@ -16,7 +16,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Edit Vault Item"
-            android:textColor="#F4F4F5"
+            android:textColor="@color/nordic_text_primary"
             android:textSize="20sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
@@ -34,7 +34,7 @@
                 android:id="@+id/etTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F4F4F5"
+                android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -51,7 +51,7 @@
                 android:id="@+id/etCategory"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F4F4F5"
+                android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -68,7 +68,7 @@
                 android:id="@+id/etUsername"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F4F4F5"
+                android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -94,7 +94,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="textPassword"
-                    android:textColor="#F4F4F5"
+                    android:textColor="@color/nordic_text_primary"
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -107,8 +107,8 @@
                 android:text="Generate"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:textColor="#F4F4F5"
-                app:backgroundTint="#27272A"
+                android:textColor="@color/nordic_text_primary"
+                app:backgroundTint="@color/nordic_soft_btn_bg"
                 app:cornerRadius="12dp" />
         </LinearLayout>
 
@@ -120,15 +120,15 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:hint="کلید TOTP دو‌مرحله‌ای (اختیاری، Base32)"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
+            android:textColorHint="@color/nordic_text_secondary"
+            app:boxStrokeColor="@color/nordic_border"
+            app:hintTextColor="@color/nordic_text_primary">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etTotpSecret"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F4F4F5" />
+                android:textColor="@color/nordic_text_primary" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
@@ -138,9 +138,9 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:hint="Website(s) - one per line"
-            android:textColorHint="#71717A"
-            app:boxStrokeColor="#A1A1AA"
-            app:hintTextColor="#F4F4F5">
+            android:textColorHint="@color/nordic_text_secondary"
+            app:boxStrokeColor="@color/nordic_border"
+            app:hintTextColor="@color/nordic_text_primary">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etWebsite"
@@ -148,7 +148,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="textMultiLine|textUri"
                 android:minLines="1"
-                android:textColor="#F4F4F5" />
+                android:textColor="@color/nordic_text_primary" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
@@ -165,7 +165,7 @@
                 android:id="@+id/etNotes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#F4F4F5"
+                android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -186,8 +186,8 @@
                 android:text="Cancel"
                 android:textSize="14sp"
                 android:textStyle="bold"
-                android:textColor="#F4F4F5"
-                app:backgroundTint="#27272A"
+                android:textColor="@color/nordic_text_primary"
+                app:backgroundTint="@color/nordic_soft_btn_bg"
                 app:cornerRadius="12dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -200,8 +200,8 @@
                 android:text="Save"
                 android:textSize="14sp"
                 android:textStyle="bold"
-                android:textColor="#09090B"
-                app:backgroundTint="#E4E4E7"
+                android:textColor="@color/nordic_primary_btn_text"
+                app:backgroundTint="@color/nordic_primary_btn_bg"
                 app:cornerRadius="12dp" />
         </LinearLayout>
 

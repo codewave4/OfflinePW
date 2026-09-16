@@ -2,7 +2,23 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="nordic_bg">#09090B</color>
-    <color name="nordic_surface">#18181B</color>
-    <color name="nordic_border">#27272A</color>
+
+    <!--
+      رنگ‌های معنایی تم (مقادیر پیش‌فرض = حالت روشن).
+      مقادیر حالت تیره در values-night/colors.xml تعریف شده‌اند و با
+      AppCompatDelegate.setDefaultNightMode() که در OfflinePWApplication / تغییر تم
+      با flag داخلی اپ (is_dark_mode) همگام است، به‌صورت خودکار حل می‌شوند.
+    -->
+    <color name="nordic_bg">#F4F4F5</color>
+    <color name="nordic_surface">#FFFFFF</color>
+    <color name="nordic_border">#E4E4E7</color>
+    <color name="nordic_text_primary">#09090B</color>
+    <color name="nordic_text_secondary">#71717A</color>
+    <color name="nordic_tonal_btn_bg">#FFFFFF</color>
+    <color name="nordic_soft_btn_bg">#E4E4E7</color>
+    <color name="nordic_primary_btn_bg">#E4E4E7</color>
+    <color name="nordic_primary_btn_text">#09090B</color>
+
+    <!-- پس‌زمینه لایه adaptive icon (نزدیک به لبه‌های تیره‌ی لوگو) -->
+    <color name="ic_launcher_background">#120D0C</color>
 </resources>

@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Security-Air--Gapped%20(No%20Internet)-success?style=flat-square" alt="Air-Gapped" />
   <img src="https://img.shields.io/badge/Encryption-AES--256--GCM-blue?style=flat-square" alt="AES-256-GCM" />
-  <img src="https://img.shields.io/badge/Key%20Protection-DEK%20%2F%20KEK%20%28PBKDF2--SHA256%29-orange?style=flat-square" alt="StrongBox" />
+  <img src="https://img.shields.io/badge/Key%20Protection-DEK%20%2F%20KEK%20%28PBKDF2--SHA256%29-orange?style=flat-square" alt="DEK / KEK (PBKDF2-SHA256)" />
   <img src="https://img.shields.io/badge/Master%20Password-PBKDF2--SHA256%20(600k)-purple?style=flat-square" alt="PBKDF2" />
   <img src="https://img.shields.io/badge/2FA-Built--in%20TOTP-yellow?style=flat-square" alt="TOTP" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
@@ -73,11 +73,27 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 ### Prerequisites
 - **Android SDK**: API level 26 (Android 8.0) minimum, targeting API 34+
 - **JDK**: Java 17 or Java 21
-- **Gradle**: 8.0+
+- **Gradle**: the bundled wrapper uses Gradle 8.13 (no manual install needed)
 
-  ___
+### Commands
 
-  ## License
+```bash
+git clone https://github.com/codewave4/OfflinePW.git
+cd OfflinePW
+
+./gradlew assembleDebug      # -> app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease    # -> app/build/outputs/apk/release/app-release.apk
+```
+
+**About release signing:** a local `assembleRelease` without a `app/release.keystore`
+is automatically signed with the **debug** key so the APK stays installable on your
+device. On CI (GitHub Actions), if the `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` secrets
+are set, the release APK is signed with your real key; otherwise CI falls back to a
+debug build.
+
+---
+
+## License
 
 This project is licensed under the MIT License — free and open source for personal and community use.
 

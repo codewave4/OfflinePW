@@ -1,6 +1,7 @@
 package com.offlinepw.vault;
 
 import android.content.ClipData;
+import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Context;
@@ -12,12 +13,13 @@ import net.sqlcipher.database.SQLiteDatabase;
 import net.sqlcipher.database.SQLiteOpenHelper;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PersistableBundle;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.Base64;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -32,6 +34,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -51,6 +54,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -226,7 +230,8 @@ public class MainActivity extends AppCompatActivity {
             if (query == null || query.trim().isEmpty()) {
                 displayList.addAll(fullList);
             } else {
-                String q = query.toLowerCase();
+                // Locale.ROOT: case-folding وابسته به زبان سیستم نباشد (مثلاً مشکل ı ترکی)
+                String q = query.toLowerCase(Locale.ROOT);
                 for (VaultItem it : fullList) {
                     if (containsIgnoreCase(it.getTitle(), q) ||
                         containsIgnoreCase(it.getUsername(), q) ||
@@ -328,7 +333,10 @@ public class MainActivity extends AppCompatActivity {
                     String currentCode = TotpGenerator.generateCode(item.getTotpSecret());
                     copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentCode);
                     revealedTotpItemIds.add(item.getId());
-                    notifyItemChanged(holder.getAdapterPosition());
+                    // اگر در لحظه‌ی کلیک لیست تغییر کرده باشد (فیلتر/ریلود)،
+                    // پوزیشن -1 می‌شود و notifyItemChanged(-1) کرش می‌دهد.
+                    int pos = holder.getBindingAdapterPosition();
+                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos);
                     holder.tvTotpDisplay.postDelayed(() -> {
                         revealedTotpItemIds.remove(item.getId());
                         notifyDataSetChanged();
@@ -393,6 +401,18 @@ public class MainActivity extends AppCompatActivity {
 
     private static final long AUTO_LOCK_DELAY_MS = 30 * 1000L; // قفل خودکار پس از ۳۰ ثانیه در پس‌زمینه
 
+    // --- مدیریت فرم افزودن/ویرایش در چرخش صفحه ---
+    private AlertDialog currentAddDialog;
+    private String editingItemId;
+    private Bundle pendingDlgRestore;      // values فیلدها هنگام چرخش صفحه
+    private String pendingDlgEditId;       // id آیتم در حال ویرایش هنگام چرخش صفحه
+
+    // --- پاک‌سازی امن کلیپ‌بورد ---
+    private static final String CLIP_MARKER_KEY = "offlinepw_sensitive_marker";
+    private static final long CLIP_CLEAR_DELAY_MS = 45 * 1000L;
+    private final Handler clipboardClearHandler = new Handler(Looper.getMainLooper());
+    private String lastCopiedText;         // فقط برای نسخه‌های قبل از Android 13 (بدون extras ماندگار)
+
     private Handler totpHandler = new Handler(Looper.getMainLooper());
     private final Runnable autoLockRunnable = this::lockVaultNow;
     private Runnable totpRunnable = new Runnable() {
@@ -424,7 +444,7 @@ public class MainActivity extends AppCompatActivity {
 
         SQLiteDatabase.loadLibs(this);
 
-        cryptoManager = new CryptoManager(this);
+        cryptoManager = new CryptoManager();
         dbHelper = new VaultDatabaseHelper(this);
 
         mainRootLayout = findViewById(R.id.mainRootLayout);
@@ -473,12 +493,28 @@ public class MainActivity extends AppCompatActivity {
             btnThemeToggle.setOnClickListener(v -> {
                 isDarkMode = !isDarkMode;
                 prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply();
-                updateThemeUI();
+                // همگام‌سازی نایت‌مود (دیالوگ‌ها/فریم‌ها) + recreate خودکار توسط AppCompat
+                AppCompatDelegate.setDefaultNightMode(isDarkMode
+                        ? AppCompatDelegate.MODE_NIGHT_YES
+                        : AppCompatDelegate.MODE_NIGHT_NO);
             });
         }
 
         updateLanguageUI();
         updateThemeUI();
+
+        // اگر فرم افزودن/ویرایش هنگام چرخش صفحه باز بوده، بازسازی‌اش می‌کنیم.
+        if (savedInstanceState != null && savedInstanceState.getBoolean("dlg_open", false)) {
+            pendingDlgRestore = savedInstanceState;
+            pendingDlgEditId = savedInstanceState.getString("dlg_editing_id");
+            if (pendingDlgEditId == null) {
+                // در حال «افزودن آیتم جدید» بودیم: نیازی به لیست نیست، همین حالا باز می‌کنیم.
+                showAddDialog(null, pendingDlgRestore);
+                pendingDlgRestore = null;
+            }
+            // وگرنه (در حال ویرایش) بعد از بارگذاری لیست در loadVaultData باز می‌شود.
+        }
+
         loadVaultData();
         scheduleAutoLock(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
     }
@@ -488,6 +524,9 @@ public class MainActivity extends AppCompatActivity {
         super.onStart();
         totpHandler.post(totpRunnable);
         cancelAutoLock();
+        // اگر کلیپی متعلق به ما در کلیپ‌بورد مانده (مثلاً پروسه در میانه‌ی
+        // مهلت ۴۵ ثانیه‌ی پاک‌سازی خاتمه یافته)، حالا پاکش می‌کنیم.
+        clearStaleClipboard();
     }
 
     @Override
@@ -495,6 +534,36 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
         totpHandler.removeCallbacks(totpRunnable);
         scheduleAutoLock();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        totpHandler.removeCallbacks(totpRunnable);
+        totpHandler.removeCallbacks(autoLockRunnable);
+        clipboardClearHandler.removeCallbacksAndMessages(null);
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // اگر فرم افزودن/ویرایش باز است، مقادیر فیلدها را برای چرخش صفحه نگه می‌داریم.
+        if (currentAddDialog != null && currentAddDialog.isShowing()) {
+            View dv = currentAddDialog.getWindow().getDecorView();
+            outState.putBoolean("dlg_open", true);
+            outState.putString("dlg_editing_id", editingItemId);
+            outState.putString("dlg_title", fieldValue(dv.findViewById(R.id.etTitle)));
+            outState.putString("dlg_category", fieldValue(dv.findViewById(R.id.etCategory)));
+            outState.putString("dlg_username", fieldValue(dv.findViewById(R.id.etUsername)));
+            outState.putString("dlg_password", fieldValue(dv.findViewById(R.id.etPassword)));
+            outState.putString("dlg_totp", fieldValue(dv.findViewById(R.id.etTotpSecret)));
+            outState.putString("dlg_website", fieldValue(dv.findViewById(R.id.etWebsite)));
+            outState.putString("dlg_notes", fieldValue(dv.findViewById(R.id.etNotes)));
+        }
+    }
+
+    private static String fieldValue(android.widget.EditText et) {
+        return (et != null && et.getText() != null) ? et.getText().toString() : "";
     }
 
     private void scheduleAutoLock() {
@@ -508,11 +577,17 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * قفل فوری نشست (مثلاً هنگام ورود به پس‌زمینه)؛
-     * کلید از حافظه پاک و کاربر به صفحه‌ی احراز هویت برمی‌گردد.
+     * کلید از حافظه پاک، کانکشن دیتابیس بسته، لیست (رکوردهای decrypt‌شده) از
+     * حافظه تخلیه و کاربر به صفحه‌ی احراز هویت برمی‌گردد.
      */
     private void lockVaultNow() {
         if (isFinishing() || isChangingConfigurations()) return;
         VaultSession.clear();
+        if (adapter != null) adapter.setItems(new ArrayList<>());
+        try {
+            dbHelper.close(); // کانکشن SQLCipher استخری را ببند تا اثری از فایل در حافظه نماند
+        } catch (Exception ignored) {
+        }
         Intent intent = new Intent(this, AuthActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
@@ -555,9 +630,10 @@ public class MainActivity extends AppCompatActivity {
         if (btnThemeToggle != null) {
             btnThemeToggle.setBackgroundTintList(ColorStateList.valueOf(cardBg));
             btnThemeToggle.setStrokeColor(ColorStateList.valueOf(strokeColor));
+            btnThemeToggle.setTextColor(textColor); // باگ قبلی: رنگ متن جا افتاده بود (نامرئی در Light)
         }
         if (etSearch != null) {
-            etSearch.setBackgroundColor(cardBg);
+            // بدون setBackgroundColor: drawable گردِ bg_search_input (با رنگ‌های معنایی) حفظ می‌شود.
             etSearch.setTextColor(textColor);
         }
 
@@ -572,6 +648,21 @@ public class MainActivity extends AppCompatActivity {
                 final boolean hadBrokenRows = corruptionFlag.get();
                 runOnUiThread(() -> {
                     if (adapter != null) adapter.setItems(items);
+                    // فرم ویرایشی که هنگام چرخش صفحه باز بوده را بعد از آماده‌شدن لیست باز می‌کنیم.
+                    if (pendingDlgRestore != null) {
+                        VaultItem target = null;
+                        for (VaultItem it : items) {
+                            if (it.getId().equals(pendingDlgEditId)) {
+                                target = it;
+                                break;
+                            }
+                        }
+                        Bundle rs = pendingDlgRestore;
+                        pendingDlgRestore = null;
+                        pendingDlgEditId = null;
+                        if (target != null) showAddDialog(target, rs);
+                        // اگر آیتم در لیست نبود (مثلاً حذف شده)، فرم را بی‌صدا رها می‌کنیم.
+                    }
                     if (hadBrokenRows) {
                         Toast.makeText(this,
                                 isPersian ? "هشدار: برخی از رکوردها قابل خواندن نبودند (احتمال خرابی یا تغییر کلید)."
@@ -579,7 +670,8 @@ public class MainActivity extends AppCompatActivity {
                                 Toast.LENGTH_LONG).show();
                     }
                 });
-            } catch (Exception e) {
+            } catch (IllegalStateException e) {
+                // کلید نشست موجود نیست (مثلاً قفل خودکار در پس‌زمینه زده شده) → به احراز هویت برگرد.
                 runOnUiThread(() -> {
                     if (!isFinishing() && !isChangingConfigurations()) {
                         VaultSession.clear();
@@ -587,6 +679,16 @@ public class MainActivity extends AppCompatActivity {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         startActivity(intent);
                         finish();
+                    }
+                });
+            } catch (Exception e) {
+                // خطای گذرای SQLite و... نباید نشست سالم را پاک کند؛ فقط اطلاع بده.
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isChangingConfigurations()) {
+                        Toast.makeText(this,
+                                isPersian ? "خطا در خواندن داده‌ها؛ لطفاً دوباره تلاش کنید."
+                                          : "Error loading data; please try again.",
+                                Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -674,10 +776,26 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showAddDialog(VaultItem existingItem) {
+        showAddDialog(existingItem, null);
+    }
+
+    /**
+     * @param existingItem آیتم در حال ویرایش یا null برای آیتم جدید
+     * @param restored values فیلدها هنگام بازسازی بعد از چرخش صفحه (یا null)
+     */
+    private void showAddDialog(VaultItem existingItem, Bundle restored) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_vault_item, null);
         builder.setView(dialogView);
         AlertDialog dialog = builder.create();
+
+        // ردیابی برای restore در چرخش صفحه
+        currentAddDialog = dialog;
+        editingItemId = existingItem != null ? existingItem.getId() : null;
+        dialog.setOnDismissListener(d -> {
+            currentAddDialog = null;
+            editingItemId = null;
+        });
 
         TextView tvDialogTitle = dialogView.findViewById(R.id.tvDialogTitle);
         TextInputLayout tilTitle = dialogView.findViewById(R.id.tilTitle);
@@ -707,6 +825,7 @@ public class MainActivity extends AppCompatActivity {
             tilUsername.setHint("نام کاربری یا ایمیل یا شماره کارت");
             tilPassword.setHint("رمز عبور");
             if (tilTotpSecret != null) tilTotpSecret.setHint("کلید TOTP دو‌مرحله‌ای (اختیاری، Base32)");
+            if (tilWebsite != null) tilWebsite.setHint("وبسایت (ها) — هر کدام در یک خط");
             tilNotes.setHint("یادداشت امن (اختیاری)");
             btnGenerate.setText("ساخت رمز");
             btnCancel.setText("انصراف");
@@ -718,6 +837,7 @@ public class MainActivity extends AppCompatActivity {
             tilUsername.setHint("Username / Email / Card Number");
             tilPassword.setHint("Password");
             if (tilTotpSecret != null) tilTotpSecret.setHint("2FA TOTP Secret Key (Optional, Base32)");
+            if (tilWebsite != null) tilWebsite.setHint("Website(s) - one per line");
             tilNotes.setHint("Secure Notes (Optional)");
             btnGenerate.setText("Generate");
             btnCancel.setText("Cancel");
@@ -735,6 +855,17 @@ public class MainActivity extends AppCompatActivity {
             if (etTotpSecret != null) etTotpSecret.setText(existingItem.getTotpSecret());
             if (etWebsite != null) etWebsite.setText(existingItem.getWebsite());
             etNotes.setText(existingItem.getNotes());
+        }
+
+        // بازسازی بعد از چرخش صفحه: مقداری که کاربر تایپ کرده بود برمی‌گردد.
+        if (restored != null) {
+            etTitle.setText(restored.getString("dlg_title", ""));
+            etCategory.setText(restored.getString("dlg_category", ""));
+            etUsername.setText(restored.getString("dlg_username", ""));
+            etPassword.setText(restored.getString("dlg_password", ""));
+            if (etTotpSecret != null) etTotpSecret.setText(restored.getString("dlg_totp", ""));
+            if (etWebsite != null) etWebsite.setText(restored.getString("dlg_website", ""));
+            etNotes.setText(restored.getString("dlg_notes", ""));
         }
 
         btnGenerate.setOnClickListener(v -> {
@@ -1054,30 +1185,63 @@ public class MainActivity extends AppCompatActivity {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         ClipData clip = ClipData.newPlainText(label, text);
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            android.os.PersistableBundle extras = new android.os.PersistableBundle();
-            extras.putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            PersistableBundle extras = new PersistableBundle();
+            extras.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true);
+            // مارکر ماندگار: اگر در این ۴۵ ثانیه پروسه خاتمه یابد، بازگشت بعدی
+            // به اپ در onStart این مارکر را می‌بیند و کلیپ را پاک می‌کند.
+            extras.putLong(CLIP_MARKER_KEY, System.currentTimeMillis());
             clip.getDescription().setExtras(extras);
         }
 
         if (clipboard != null) {
             clipboard.setPrimaryClip(clip);
+            lastCopiedText = text;
             Toast.makeText(this, label + (isPersian ? " کپی شد" : " copied"), Toast.LENGTH_SHORT).show();
 
-            final String copiedText = text;
-            final ClipboardManager clipboardRef = clipboard;
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                ClipData current = clipboardRef.getPrimaryClip();
-                if (current != null && current.getItemCount() > 0 &&
-                        copiedText.equals(String.valueOf(current.getItemAt(0).getText()))) {
-                    clipboardRef.setPrimaryClip(ClipData.newPlainText("", ""));
-                }
-            }, 45000);
+            // پاک‌سازی معوق (Handler مشترک است تا در onDestroy همه‌چیز remove شود)
+            clipboardClearHandler.removeCallbacksAndMessages(null);
+            clipboardClearHandler.postDelayed(this::clearStaleClipboard, CLIP_CLEAR_DELAY_MS);
         }
     }
 
+    /**
+     * اگر کلیپ فعلیِ کلیپ‌بورد هنوز متعلق به ماست (مارکر ماندگار API 33+ یا مقایسه‌ی
+     * متن در نسخه‌های قدیمی)، پس از پایان مهلت پاکش می‌کند.
+     *
+     * در onStart (بعد از هر بازگشت از پس‌زمینه یا مرگ پروسه) و به‌عنوان تایمر ۴۵
+     * ثانیه‌ای فراخوانی می‌شود. اگر مهلت هنوز تمام نشده باشد (مثلاً Activity destroy و
+     * recreate شده و تایمر قبلی از بین رفته)، زمان باقی‌مانده را مجدداً زمان‌بندی می‌کند
+     * و زودتر از موعد پاک نمی‌کند.
+     */
+    private void clearStaleClipboard() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) return;
+        ClipData current = clipboard.getPrimaryClip();
+        if (current == null || current.getItemCount() == 0) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            PersistableBundle extras = current.getDescription().getExtras();
+            if (extras == null || !extras.containsKey(CLIP_MARKER_KEY)) return; // کلپ متعلق به ماست نه
+            long elapsed = System.currentTimeMillis() - extras.getLong(CLIP_MARKER_KEY, System.currentTimeMillis());
+            if (elapsed < CLIP_CLEAR_DELAY_MS) {
+                // هنوز در مهلت؛ تایمر باقی‌مانده را (باز)راه‌اندازی کن
+                clipboardClearHandler.removeCallbacksAndMessages(null);
+                clipboardClearHandler.postDelayed(this::clearStaleClipboard, CLIP_CLEAR_DELAY_MS - elapsed);
+                return;
+            }
+        } else {
+            boolean isOurs = lastCopiedText != null
+                    && lastCopiedText.equals(String.valueOf(current.getItemAt(0).getText()));
+            if (!isOurs) return;
+        }
+
+        clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+        lastCopiedText = null;
+    }
+
     private static boolean containsIgnoreCase(String text, String query) {
-        return text != null && text.toLowerCase().contains(query);
+        return text != null && text.toLowerCase(Locale.ROOT).contains(query);
     }
 
     private String generateStrongPassword(int length) {
