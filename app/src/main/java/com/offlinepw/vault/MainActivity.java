@@ -11,14 +11,19 @@ import android.content.res.ColorStateList;
 import android.database.Cursor;
 import net.sqlcipher.database.SQLiteDatabase;
 import net.sqlcipher.database.SQLiteOpenHelper;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PersistableBundle;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -31,10 +36,15 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -50,7 +60,15 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import com.offlinepw.vault.crypto.CryptoManager;
 import com.offlinepw.vault.crypto.VaultSession;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.SecureRandom;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -70,8 +88,9 @@ public class MainActivity extends AppCompatActivity {
         private String notes;
         private String totpSecret;
         private String website;
+        private boolean pinned;
 
-        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website) {
+        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned) {
             this.id = id;
             this.title = title;
             this.category = category;
@@ -80,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
             this.notes = notes;
             this.totpSecret = totpSecret;
             this.website = website;
+            this.pinned = pinned;
         }
 
         public String getId() { return id; }
@@ -90,6 +110,8 @@ public class MainActivity extends AppCompatActivity {
         public String getNotes() { return notes; }
         public String getTotpSecret() { return totpSecret; }
         public String getWebsite() { return website; }
+        public boolean isPinned() { return pinned; }
+        public void setPinned(boolean pinned) { this.pinned = pinned; }
     }
 
     public static class VaultDatabaseHelper extends SQLiteOpenHelper {
@@ -102,9 +124,10 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_NOTES = "notes";
         public static final String COLUMN_TOTP = "totp_secret";
         public static final String COLUMN_WEBSITE = "website";
+        public static final String COLUMN_PINNED = "pinned";
 
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 3);
+            super(context, "offline_pw_vault.db", null, 4);
         }
 
         private String getPassphrase() {
@@ -123,7 +146,8 @@ public class MainActivity extends AppCompatActivity {
                     COLUMN_PASSWORD + " TEXT, " +
                     COLUMN_NOTES + " TEXT, " +
                     COLUMN_TOTP + " TEXT, " +
-                    COLUMN_WEBSITE + " TEXT)");
+                    COLUMN_WEBSITE + " TEXT, " +
+                    COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0)");
         }
 
         @Override
@@ -136,6 +160,11 @@ public class MainActivity extends AppCompatActivity {
             if (oldVersion < 3) {
                 try {
                     db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_WEBSITE + " TEXT");
+                } catch (Exception ignored) {}
+            }
+            if (oldVersion < 4) {
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0");
                 } catch (Exception ignored) {}
             }
         }
@@ -154,7 +183,17 @@ public class MainActivity extends AppCompatActivity {
             cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes(), id + "|notes"));
             cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret(), id + "|totp"));
             cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite(), id + "|website"));
+            cv.put(COLUMN_PINNED, item.isPinned() ? 1 : 0);
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+        }
+
+        public void setPinned(String id, boolean pinned) {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            SQLiteDatabase db = getWritableDatabase(passphrase);
+            ContentValues cv = new ContentValues();
+            cv.put(COLUMN_PINNED, pinned ? 1 : 0);
+            db.update(TABLE_ITEMS, cv, COLUMN_ID + "=?", new String[]{id});
         }
 
         public List<VaultItem> getAllDecryptedItems(CryptoManager crypto, AtomicBoolean corruptionFlag) {
@@ -164,7 +203,9 @@ public class MainActivity extends AppCompatActivity {
             SQLiteDatabase db = getReadableDatabase(passphrase);
             Cursor c = null;
             try {
-                c = db.query(TABLE_ITEMS, null, null, null, null, null, null);
+                // آیتم‌های پین‌شده همیشه بالای لیست، بقیه به ترتیب ثبت
+                c = db.query(TABLE_ITEMS, null, null, null, null, null,
+                        COLUMN_PINNED + " DESC, rowid ASC");
                 while (c.moveToNext()) {
                     String id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID));
                     try {
@@ -183,7 +224,12 @@ public class MainActivity extends AppCompatActivity {
                         if (websiteIndex != -1) {
                             website = crypto.decrypt(c.getString(websiteIndex), id + "|website");
                         }
-                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website));
+                        boolean pinned = false;
+                        int pinnedIndex = c.getColumnIndex(COLUMN_PINNED);
+                        if (pinnedIndex != -1) {
+                            pinned = c.getInt(pinnedIndex) != 0;
+                        }
+                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website, pinned));
                     } catch (Exception perRow) {
                         // یک رکورد خراب نباید جلوی خواندن بقیه‌ی رکوردها را بگیرد؛
                         // فقط با پرچم خطا ادامه می‌دهیم تا UI اطلاع‌رسانی کند.
@@ -268,6 +314,16 @@ public class MainActivity extends AppCompatActivity {
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
 
+            // نشان پین — فقط وقتی آیتم پین شده باشد دیده می‌شود
+            ImageView ivPin = new ImageView(ctx);
+            ivPin.setImageResource(R.drawable.ic_pin);
+            ivPin.setColorFilter(Color.parseColor("#F59E0B"));
+            LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(20, 20);
+            pinLp.setMarginEnd(8);
+            ivPin.setLayoutParams(pinLp);
+            ivPin.setVisibility(View.GONE);
+            header.addView(ivPin);
+
             TextView tvTitle = new TextView(ctx);
             tvTitle.setTextSize(17f);
             tvTitle.setTypeface(null, Typeface.BOLD);
@@ -307,12 +363,13 @@ public class MainActivity extends AppCompatActivity {
             root.addView(tvTotpDisplay);
 
             card.addView(root);
-            return new ViewHolder(card, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay);
+            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay);
         }
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             VaultItem item = displayList.get(position);
+            holder.ivPin.setVisibility(item.isPinned() ? View.VISIBLE : View.GONE);
             holder.tvTitle.setText(item.getTitle());
 
             String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
@@ -369,17 +426,24 @@ public class MainActivity extends AppCompatActivity {
 
         public class ViewHolder extends RecyclerView.ViewHolder {
             MaterialCardView card;
+            ImageView ivPin;
             TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay;
 
-            public ViewHolder(@NonNull View itemView, TextView t, TextView c, TextView u, TextView m, TextView totp) {
+            public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u, TextView m, TextView totp) {
                 super(itemView);
                 card = (MaterialCardView) itemView;
+                ivPin = pin;
                 tvTitle = t;
                 tvCategory = c;
                 tvUsername = u;
                 tvMasked = m;
                 tvTotpDisplay = totp;
             }
+        }
+
+        public VaultItem getItem(int position) {
+            if (position < 0 || position >= displayList.size()) return null;
+            return displayList.get(position);
         }
     }
 
@@ -394,6 +458,24 @@ public class MainActivity extends AppCompatActivity {
     private CoordinatorLayout mainRootLayout;
     private AppBarLayout appBarLayout;
     private FloatingActionButton fabAdd;
+    private FloatingActionButton fabBackup;
+
+    // --- اسوایپ پین/آن‌پین ---
+    private final Paint swipePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private Drawable swipeIconPin;   // lazy-load با tint سفید
+    private Drawable swipeIconUnpin;
+    private static final int SWIPE_PIN_COLOR = 0xFFF59E0B;    // کهربایی: پین (اسوایپ به چپ)
+    private static final int SWIPE_UNPIN_COLOR = 0xFFEF4444;  // قرمز: آن‌پین (اسوایپ به راست)
+
+    // --- بکاپ/بازیابی ---
+    private static final String PROVIDER_AUTHORITY = "com.offlinepw.vault.fileprovider";
+    private Uri pendingImportUri;
+    private final ActivityResultLauncher<String[]> openBackupLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri == null) return;
+                pendingImportUri = uri;
+                showBackupImportDialog();
+            });
 
     private boolean isDarkMode = true;
     private boolean isPersian = false;
@@ -461,6 +543,29 @@ public class MainActivity extends AppCompatActivity {
         if (rvVault != null) {
             rvVault.setLayoutManager(new LinearLayoutManager(this));
             rvVault.setAdapter(adapter);
+            // اسوایپ افقی: چپ = پین، راست = آن‌پین
+            ItemTouchHelper pinTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
+                    0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+                @Override
+                public boolean onMove(@NonNull RecyclerView rv, @NonNull RecyclerView.ViewHolder vh,
+                                      @NonNull RecyclerView.ViewHolder target) {
+                    return false; // بدون جابه‌جایی ترتیب
+                }
+
+                @Override
+                public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+                    handlePinSwipe(viewHolder, direction);
+                }
+
+                @Override
+                public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv,
+                                        @NonNull RecyclerView.ViewHolder holder,
+                                        float dX, float dY, int actionState, boolean isCurrentlyActive) {
+                    drawSwipeBackground(c, holder, dX, actionState);
+                    super.onChildDraw(c, rv, holder, dX, dY, actionState, isCurrentlyActive);
+                }
+            });
+            pinTouchHelper.attachToRecyclerView(rvVault);
         }
 
         if (etSearch != null) {
@@ -479,6 +584,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (fabAdd != null) fabAdd.setOnClickListener(v -> showAddDialog(null));
+        fabBackup = findViewById(R.id.fabBackup);
+        if (fabBackup != null) fabBackup.setOnClickListener(v -> showBackupSheet());
         if (btnAbout != null) btnAbout.setOnClickListener(v -> showAboutSecurityDialog());
 
         if (btnLanguage != null) {
@@ -890,7 +997,9 @@ public class MainActivity extends AppCompatActivity {
             }
 
             String id = existingItem != null ? existingItem.getId() : UUID.randomUUID().toString();
-            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website);
+            // حالت پین در ویرایش حفظ می‌شود (تغییر پین فقط از طریق اسوایپ انجام می‌شود)
+            boolean keepPinned = existingItem != null && existingItem.isPinned();
+            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website, keepPinned);
 
             if (!totp.isEmpty() && !TotpGenerator.isValidSecret(totp)) {
                 Toast.makeText(this, isPersian
@@ -1238,6 +1347,449 @@ public class MainActivity extends AppCompatActivity {
 
         clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
         lastCopiedText = null;
+    }
+
+    // ================= پین (اسوایپ چپ = پین / اسوایپ راست = آن‌پین) =================
+
+    private void handlePinSwipe(RecyclerView.ViewHolder viewHolder, int direction) {
+        int pos = viewHolder.getAdapterPosition();
+        if (pos == RecyclerView.NO_POSITION || adapter == null) return;
+        VaultItem item = adapter.getItem(pos);
+        if (item == null) {
+            adapter.notifyItemChanged(pos);
+            return;
+        }
+        // طبق درخواست کاربر: اسوایپ به چپ = پین، اسوایپ به راست = آن‌پین
+        boolean wantPinned = (direction == ItemTouchHelper.LEFT);
+        if (item.isPinned() == wantPinned) {
+            // تغییری لازم نیست؛ ردیف را برگردان و راهنما نشان بده
+            adapter.notifyItemChanged(pos);
+            Toast.makeText(this, isPersian
+                    ? (wantPinned ? "این آیتم قبلاً پین شده است" : "این آیتم پین نیست")
+                    : (wantPinned ? "Item is already pinned" : "Item is not pinned"),
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // ابتدا ردیف را برگردان (اگر خطایی رخ داد ردیف گم نمی‌شود)، بعد DB را به‌روز کن
+        adapter.notifyItemChanged(pos);
+        final String itemId = item.getId();
+        new Thread(() -> {
+            try {
+                dbHelper.setPinned(itemId, wantPinned);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    // دوباره مرتب‌سازی: آیتم پین‌شده بالای لیست می‌رود
+                    loadVaultData();
+                    Toast.makeText(this, isPersian
+                            ? (wantPinned ? "آیتم پین شد" : "پین برداشته شد")
+                            : (wantPinned ? "Item pinned" : "Pin removed"),
+                            Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        isPersian ? "به‌روزرسانی پین ناموفق بود؛ دوباره تلاش کنید"
+                                  : "Pin update failed; please try again",
+                        Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    /**
+     * هنگام اسوایپ، نوار رنگی و آیکن پین را پشت ردیف رسم می‌کند.
+     * اسوایپ به چپ (dX < 0) → فاصله در سمت راست باز می‌شود (اقدام: پین، رنگ کهربایی).
+     * اسوایپ به راست (dX > 0) → فاصله در سمت چپ (اقدام: آن‌پین، رنگ قرمز).
+     */
+    private void drawSwipeBackground(Canvas canvas, RecyclerView.ViewHolder holder, float dX, int actionState) {
+        if (actionState != ItemTouchHelper.ACTION_STATE_SWIPE || Math.abs(dX) < 2f) return;
+        View itemView = holder.itemView;
+        float left = itemView.getLeft();
+        float right = itemView.getRight();
+        float top = itemView.getTop();
+        float bottom = itemView.getBottom();
+        boolean toLeft = dX < 0;
+
+        float rectLeft = toLeft ? left : left - dX;
+        float rectRight = toLeft ? right - dX : right;
+        swipePaint.setColor(toLeft ? SWIPE_PIN_COLOR : SWIPE_UNPIN_COLOR);
+        float radius = 24;
+        canvas.drawRoundRect(rectLeft, top, rectRight, bottom, radius, radius, swipePaint);
+
+        // آیکن در مرکزِ فاصله (وقتی فاصله کافی باز شده)
+        float gapWidth = Math.abs(dX);
+        float iconSize = 32;
+        if (gapWidth >= iconSize + 12) {
+            Drawable icon = getSwipeIcon();
+            if (icon != null) {
+                float gapStart = toLeft ? right : left - dX;
+                float iconX = gapStart + (gapWidth - iconSize) / 2f;
+                float iconY = (top + bottom) / 2f - iconSize / 2f;
+                icon.setBounds(Math.round(iconX), Math.round(iconY),
+                        Math.round(iconX + iconSize), Math.round(iconY + iconSize));
+                icon.draw(canvas);
+            }
+        }
+    }
+
+    private Drawable getSwipeIcon() {
+        if (swipeIconPin == null) {
+            swipeIconPin = ContextCompat.getDrawable(this, R.drawable.ic_pin);
+            if (swipeIconPin != null) {
+                swipeIconPin = swipeIconPin.mutate();
+                swipeIconPin.setTint(Color.WHITE);
+            }
+        }
+        return swipeIconPin;
+    }
+
+    // ================= بکاپ / بازیابی =================
+
+    private static final int MIN_BACKUP_PASSWORD_LENGTH = 10;
+
+    private void showBackupSheet() {
+        BottomSheetDialog sheet = new BottomSheetDialog(this);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 20, 24, 24);
+        root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(isPersian ? "بکاپ و بازیابی" : "Backup & Restore");
+        tvTitle.setTextSize(19f);
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        root.addView(tvTitle);
+
+        MaterialButton btnExport = new MaterialButton(this);
+        btnExport.setText(isPersian ? "ساخت بکاپ (خروجی)" : "Create Backup (Export)");
+        LinearLayout.LayoutParams exportLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        exportLp.topMargin = 16;
+        btnExport.setLayoutParams(exportLp);
+        btnExport.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E4E4E7")));
+        btnExport.setTextColor(Color.parseColor("#09090B"));
+        btnExport.setOnClickListener(v -> {
+            sheet.dismiss();
+            showBackupExportDialog();
+        });
+        root.addView(btnExport);
+
+        MaterialButton btnImport = new MaterialButton(this);
+        btnImport.setText(isPersian ? "بازیابی از بکاپ (ورودی)" : "Restore from Backup (Import)");
+        LinearLayout.LayoutParams importLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        importLp.topMargin = 10;
+        btnImport.setLayoutParams(importLp);
+        btnImport.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
+        btnImport.setTextColor(Color.parseColor("#F4F4F5"));
+        btnImport.setOnClickListener(v -> {
+            sheet.dismiss();
+            openBackupLauncher.launch(new String[]{"*/*"});
+        });
+        root.addView(btnImport);
+
+        TextView tvNote = new TextView(this);
+        tvNote.setText(isPersian
+                ? "بکاپ به‌صورت سر-به-سر رمزنگاری می‌شود (AES-256-GCM). بدون «رمز بکاپ» محتوای فایل غیرقابل‌خواندن است و فراموشی آن، بازیابی را برای همیشه غیرممکن می‌کند."
+                : "Backups are end-to-end encrypted (AES-256-GCM). Without the backup password the file is unreadable, and a forgotten backup password makes recovery permanently impossible.");
+        tvNote.setTextSize(12f);
+        tvNote.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        noteLp.topMargin = 16;
+        tvNote.setLayoutParams(noteLp);
+        root.addView(tvNote);
+
+        sheet.setContentView(root);
+        sheet.show();
+    }
+
+    private void showBackupExportDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 20, 24, 8);
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(isPersian ? "رمز بکاپ" : "Backup Password");
+        tvTitle.setTextSize(18f);
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        root.addView(tvTitle);
+
+        TextView tvDesc = new TextView(this);
+        tvDesc.setText(isPersian
+                ? "رمزی با حداقل " + MIN_BACKUP_PASSWORD_LENGTH + " کاراکتر انتخاب کنید. برای بازگرداندن همین بکاپ، به این رمز نیاز دارید."
+                : "Choose a password of at least " + MIN_BACKUP_PASSWORD_LENGTH + " characters. You will need it to restore this backup.");
+        tvDesc.setTextSize(13f);
+        tvDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        descLp.topMargin = 8;
+        tvDesc.setLayoutParams(descLp);
+        root.addView(tvDesc);
+
+        TextInputLayout tilPass = new TextInputLayout(this);
+        tilPass.setHint(isPersian ? "رمز بکاپ" : "Backup Password");
+        tilPass.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        TextInputEditText etPass = new TextInputEditText(this);
+        etPass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tilPass.addView(etPass);
+        LinearLayout.LayoutParams tilLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tilLp.topMargin = 16;
+        tilPass.setLayoutParams(tilLp);
+        root.addView(tilPass);
+
+        MaterialButton btnCreate = new MaterialButton(this);
+        btnCreate.setText(isPersian ? "ساخت فایل بکاپ" : "Create Backup File");
+        btnCreate.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E4E4E7")));
+        btnCreate.setTextColor(Color.parseColor("#09090B"));
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = 16;
+        btnCreate.setLayoutParams(btnLp);
+        root.addView(btnCreate);
+
+        AlertDialog dialog = builder.setView(root).create();
+        dialog.show();
+
+        btnCreate.setOnClickListener(v -> {
+            String pass = etPass.getText() != null ? etPass.getText().toString() : "";
+            if (pass.length() < MIN_BACKUP_PASSWORD_LENGTH) {
+                Toast.makeText(this, isPersian
+                        ? ("رمز بکاپ باید حداقل " + MIN_BACKUP_PASSWORD_LENGTH + " کاراکتر باشد")
+                        : ("Backup password must be at least " + MIN_BACKUP_PASSWORD_LENGTH + " characters"),
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            btnCreate.setEnabled(false);
+            doBackupExport(pass, dialog, btnCreate);
+        });
+    }
+
+    private void doBackupExport(String backupPassword, AlertDialog dialog, MaterialButton busyButton) {
+        new Thread(() -> {
+            try {
+                List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager, null);
+                String json = buildBackupJson(items);
+                byte[] fileBytes = BackupManager.encrypt(json, backupPassword);
+
+                File base = getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getFilesDir();
+                File dir = new File(base, "backups");
+                if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("cannot create backup dir");
+                String ts = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new java.util.Date());
+                File outFile = new File(dir, "OfflinePW-Backup-" + ts + ".opwb");
+                try (OutputStream os = new java.io.FileOutputStream(outFile)) {
+                    os.write(fileBytes);
+                }
+                Uri shareUri = FileProvider.getUriForFile(this, PROVIDER_AUTHORITY, outFile);
+
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    dialog.dismiss();
+                    Intent share = new Intent(Intent.ACTION_SEND);
+                    share.setType("application/octet-stream");
+                    share.putExtra(Intent.EXTRA_STREAM, shareUri);
+                    share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(share, isPersian ? "اشتراک‌گذاری فایل بکاپ" : "Share backup file"));
+                    Toast.makeText(this, isPersian
+                            ? ("بکاپ " + items.size() + " آیتم ساخته شد")
+                            : ("Backup of " + items.size() + " item(s) created"),
+                            Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    busyButton.setEnabled(true);
+                    dialog.dismiss();
+                    Toast.makeText(this, isPersian
+                            ? "ساخت بکاپ ناموفق بود؛ دوباره تلاش کنید"
+                            : "Backup failed; please try again",
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private String buildBackupJson(List<VaultItem> items) throws Exception {
+        JSONObject root = new JSONObject();
+        root.put("format", "offlinepw-backup-v1-vault");
+        root.put("app", "OfflinePW");
+        root.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
+                .format(new java.util.Date()));
+        JSONArray arr = new JSONArray();
+        for (VaultItem it : items) {
+            JSONObject o = new JSONObject();
+            o.put("id", it.getId());
+            o.put("title", it.getTitle());
+            o.put("category", it.getCategory());
+            o.put("username", it.getUsername());
+            o.put("password", it.getPassword());
+            o.put("notes", it.getNotes());
+            o.put("totp", it.getTotpSecret());
+            o.put("website", it.getWebsite());
+            o.put("pinned", it.isPinned());
+            arr.put(o);
+        }
+        root.put("item_count", arr.length());
+        root.put("items", arr);
+        return root.toString();
+    }
+
+    private void showBackupImportDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(24, 20, 24, 8);
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(isPersian ? "بازیابی از بکاپ" : "Restore from Backup");
+        tvTitle.setTextSize(18f);
+        tvTitle.setTypeface(null, Typeface.BOLD);
+        tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        root.addView(tvTitle);
+
+        TextView tvDesc = new TextView(this);
+        tvDesc.setText(isPersian
+                ? "رمز بکاپی که هنگام ساخت فایل بکاپ انتخاب کرده بودید را وارد کنید."
+                : "Enter the backup password you used when the backup file was created.");
+        tvDesc.setTextSize(13f);
+        tvDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+        LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        descLp.topMargin = 8;
+        tvDesc.setLayoutParams(descLp);
+        root.addView(tvDesc);
+
+        TextInputLayout tilPass = new TextInputLayout(this);
+        tilPass.setHint(isPersian ? "رمز بکاپ" : "Backup Password");
+        tilPass.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        TextInputEditText etPass = new TextInputEditText(this);
+        etPass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tilPass.addView(etPass);
+        LinearLayout.LayoutParams tilLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tilLp.topMargin = 16;
+        tilPass.setLayoutParams(tilLp);
+        root.addView(tilPass);
+
+        MaterialButton btnRestore = new MaterialButton(this);
+        btnRestore.setText(isPersian ? "رمزگشایی و ادامه" : "Decrypt & Continue");
+        btnRestore.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E4E4E7")));
+        btnRestore.setTextColor(Color.parseColor("#09090B"));
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.topMargin = 16;
+        btnRestore.setLayoutParams(btnLp);
+        root.addView(btnRestore);
+
+        AlertDialog dialog = builder.setView(root).create();
+        dialog.show();
+
+        btnRestore.setOnClickListener(v -> {
+            String pass = etPass.getText() != null ? etPass.getText().toString() : "";
+            if (pass.isEmpty()) {
+                Toast.makeText(this, isPersian ? "رمز بکاپ را وارد کنید" : "Enter the backup password",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            btnRestore.setEnabled(false);
+            doBackupImport(pass, dialog, btnRestore);
+        });
+    }
+
+    private void doBackupImport(String backupPassword, AlertDialog dialog, MaterialButton busyButton) {
+        final Uri uri = pendingImportUri;
+        new Thread(() -> {
+            try {
+                byte[] fileBytes = readAllBytes(uri);
+                String json = BackupManager.decrypt(fileBytes, backupPassword);
+                JSONObject root = new JSONObject(json);
+                if (!"offlinepw-backup-v1-vault".equals(root.optString("format", ""))) {
+                    throw new IllegalArgumentException("bad backup format");
+                }
+                JSONArray arr = root.getJSONArray("items");
+                List<VaultItem> items = new ArrayList<>();
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    items.add(new VaultItem(
+                            o.optString("id", UUID.randomUUID().toString()),
+                            o.optString("title"),
+                            o.optString("category", "LOGIN"),
+                            o.optString("username"),
+                            o.optString("password"),
+                            o.optString("notes"),
+                            o.optString("totp"),
+                            o.optString("website"),
+                            o.optBoolean("pinned", false)));
+                }
+                final int count = items.size();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    dialog.dismiss();
+                    busyButton.setEnabled(true);
+                    new AlertDialog.Builder(this)
+                            .setTitle(isPersian ? "بازیابی بکاپ" : "Restore Backup")
+                            .setMessage(isPersian
+                                    ? ("بکاپ " + count + " آیتم دارد.\nآیتم‌هایی که شناسه‌ی یکسان دارند بروزرسانی و بقیه به‌عنوان جدید اضافه می‌شوند.\nادامه می‌دهید؟")
+                                    : ("The backup contains " + count + " item(s).\nItems with the same ID will be updated, the rest will be added.\nContinue?"))
+                            .setPositiveButton(isPersian ? "بازیابی" : "Restore", (d, w) -> writeImportedItems(items))
+                            .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
+                            .show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    dialog.dismiss();
+                    busyButton.setEnabled(true);
+                    pendingImportUri = null;
+                    Toast.makeText(this, isPersian
+                            ? "رمز بکاپ اشتباه است یا فایل یک بکاپ معتبر نیست"
+                            : "Wrong backup password or the file is not a valid backup",
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private void writeImportedItems(List<VaultItem> items) {
+        new Thread(() -> {
+            try {
+                for (VaultItem it : items) {
+                    dbHelper.insertItem(it, cryptoManager);
+                }
+                final int count = items.size();
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    pendingImportUri = null;
+                    loadVaultData();
+                    Toast.makeText(this, isPersian
+                            ? (count + " آیتم بازیابی شد")
+                            : (count + " item(s) restored"),
+                            Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        isPersian ? "بازیابی ناموفق بود؛ دوباره تلاش کنید"
+                                  : "Restore failed; please try again",
+                        Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private byte[] readAllBytes(Uri uri) throws Exception {
+        if (uri == null) throw new java.io.IOException("no uri");
+        try (InputStream is = getContentResolver().openInputStream(uri);
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+            if (is == null) throw new java.io.IOException("cannot open file");
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                bos.write(buf, 0, n);
+            }
+            return bos.toByteArray();
+        }
     }
 
     private static boolean containsIgnoreCase(String text, String query) {

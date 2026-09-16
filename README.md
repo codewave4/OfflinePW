@@ -63,6 +63,8 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 - **Cryptographic Password Generator**: Built-in high-entropy 16-character password generator using `SecureRandom`.
 - **Smart Categorization**: Flexible categorization for entries (`LOGIN`, `CARD`, `WIFI`, `NOTE`).
 - **Instant Offline Search**: Fast real-time filtering across titles, account names, categories, and secure notes.
+- **Pin / Unpin Items**: Swipe an item **left to pin** it (it jumps to the top with a 📌 marker) and **right to unpin** it. The pin state is persisted in the encrypted database.
+- **Encrypted Backup & Restore**: The backup button (above the `+` button) offers **Export** — the whole vault is re-serialized and encrypted with AES-256-GCM using a key derived from a *separate backup password* (PBKDF2-SHA256, 600k iterations, random salt) and shared as a file you can store anywhere — and **Restore** — pick a backup file, enter the backup password, and the items are merged back into the vault (same-ID items are updated, new ones added). A backup is useless without its backup password, so the zero-knowledge property is preserved.
 - **Bilingual Support**: Instant toggle between English (EN) and Persian (FA).
 - **Dark & Light Themes**: Minimalist, high-contrast Material Design 3 interface with battery-saving dark mode.
 

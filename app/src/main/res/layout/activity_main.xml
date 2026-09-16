@@ -133,6 +133,21 @@
         android:paddingBottom="90dp"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
+    <!-- دکمه‌ی بکاپ/بازیابی — بالای دکمه‌ی افزودن -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabBackup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:layout_marginBottom="88dp"
+        app:fabCustomSize="48dp"
+        app:maxImageSize="22dp"
+        android:src="@drawable/ic_backup"
+        app:backgroundTint="@color/nordic_tonal_btn_bg"
+        app:tint="@color/nordic_text_primary"
+        app:elevation="4dp" />
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabAdd"
         android:layout_width="wrap_content"

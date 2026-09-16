@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- محل اصلی فایل‌های بکاپ (پوشه‌ی خصوصی اپ در حافظه‌ی خارجی) -->
+    <external-files-path
+        name="backups"
+        path="backups/" />
+    <!-- fallback اگر حافظه‌ی خارجی در دسترس نباشد (پوشه‌ی خصوصی داخلی) -->
+    <files-path
+        name="backups_internal"
+        path="backups/" />
+</paths>
