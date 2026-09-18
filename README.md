@@ -64,6 +64,8 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 - **Smart Categorization**: Flexible categorization for entries (`LOGIN`, `CARD`, `WIFI`, `NOTE`).
 - **Instant Offline Search**: Fast real-time filtering across titles, account names, categories, and secure notes.
 - **Pin / Unpin Items**: Swipe an item **left to pin** it (it jumps to the top with a 📌 marker) and **right to unpin** it. The pin state is persisted in the encrypted database.
+- **List Ordering**: Sort the vault by **creation order, title (A-Z, Persian-collation aware), category, or recently-updated-first** from the ⋮ menu — pinned items always stay on top in every order. Each card shows its **last-updated date** (Jalali calendar for Persian).
+- **Password Health Report**: One tap in the ⋮ menu scans the vault locally (nothing leaves the device) for **reused passwords**, **weak passwords** (length + Shannon-entropy heuristics), and **stale passwords** unchanged for 180+ days, and shows which items need attention.
 - **Encrypted Backup & Restore**: The backup button (above the `+` button) offers **Export** — the whole vault is re-serialized and encrypted with AES-256-GCM using a key derived from a *separate backup password* (PBKDF2-SHA256, 600k iterations, random salt) and shared as a file you can store anywhere — and **Restore** — pick a backup file, enter the backup password, and the items are merged back into the vault (same-ID items are updated, new ones added). A backup is useless without its backup password, so the zero-knowledge property is preserved.
 - **Bilingual Support**: Instant toggle between English (EN) and Persian (FA).
 - **Dark & Light Themes**: Minimalist, high-contrast Material Design 3 interface with battery-saving dark mode.

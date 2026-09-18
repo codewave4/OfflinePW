@@ -89,8 +89,14 @@ public class MainActivity extends AppCompatActivity {
         private String totpSecret;
         private String website;
         private boolean pinned;
+        private long createdAt;   // epoch millis (0 = نامعلوم/قدیمی)
+        private long updatedAt;   // epoch millis (0 = نامعلوم/قدیمی)
 
         public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned) {
+            this(id, title, category, username, password, notes, totpSecret, website, pinned, 0L, 0L);
+        }
+
+        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned, long createdAt, long updatedAt) {
             this.id = id;
             this.title = title;
             this.category = category;
@@ -100,6 +106,8 @@ public class MainActivity extends AppCompatActivity {
             this.totpSecret = totpSecret;
             this.website = website;
             this.pinned = pinned;
+            this.createdAt = createdAt;
+            this.updatedAt = updatedAt;
         }
 
         public String getId() { return id; }
@@ -112,6 +120,8 @@ public class MainActivity extends AppCompatActivity {
         public String getWebsite() { return website; }
         public boolean isPinned() { return pinned; }
         public void setPinned(boolean pinned) { this.pinned = pinned; }
+        public long getCreatedAt() { return createdAt; }
+        public long getUpdatedAt() { return updatedAt; }
     }
 
     public static class VaultDatabaseHelper extends SQLiteOpenHelper {
@@ -125,9 +135,11 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_TOTP = "totp_secret";
         public static final String COLUMN_WEBSITE = "website";
         public static final String COLUMN_PINNED = "pinned";
+        public static final String COLUMN_CREATED_AT = "created_at";
+        public static final String COLUMN_UPDATED_AT = "updated_at";
 
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 4);
+            super(context, "offline_pw_vault.db", null, 5);
         }
 
         private String getPassphrase() {
@@ -147,7 +159,9 @@ public class MainActivity extends AppCompatActivity {
                     COLUMN_NOTES + " TEXT, " +
                     COLUMN_TOTP + " TEXT, " +
                     COLUMN_WEBSITE + " TEXT, " +
-                    COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0)");
+                    COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0, " +
+                    COLUMN_CREATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
+                    COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0)");
         }
 
         @Override
@@ -167,6 +181,25 @@ public class MainActivity extends AppCompatActivity {
                     db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0");
                 } catch (Exception ignored) {}
             }
+            if (oldVersion < 5) {
+                // زمان‌ها به‌صورت عددی و داخل همان DB رمزنگاری‌شده (SQLCipher) ذخیره
+                // می‌شوند؛ حساسیت محتوایی ندارند (مثل category/pinned).
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_CREATED_AT + " INTEGER NOT NULL DEFAULT 0");
+                } catch (Exception ignored) {}
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0");
+                } catch (Exception ignored) {}
+                // رکوردهای قدیمی بی‌تاریخ را با زمان مهاجرت پر می‌کنیم تا
+                // «آخرین به‌روزرسانی» و گزارش کهنه‌بودن معنادار بمانند.
+                try {
+                    long now = System.currentTimeMillis();
+                    db.execSQL("UPDATE " + TABLE_ITEMS + " SET " + COLUMN_CREATED_AT + "=" + now +
+                            " WHERE " + COLUMN_CREATED_AT + "=0");
+                    db.execSQL("UPDATE " + TABLE_ITEMS + " SET " + COLUMN_UPDATED_AT + "=" + now +
+                            " WHERE " + COLUMN_UPDATED_AT + "=0");
+                } catch (Exception ignored) {}
+            }
         }
 
         public void insertItem(VaultItem item, CryptoManager crypto) {
@@ -184,6 +217,8 @@ public class MainActivity extends AppCompatActivity {
             cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret(), id + "|totp"));
             cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite(), id + "|website"));
             cv.put(COLUMN_PINNED, item.isPinned() ? 1 : 0);
+            cv.put(COLUMN_CREATED_AT, item.getCreatedAt());
+            cv.put(COLUMN_UPDATED_AT, item.getUpdatedAt());
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
@@ -229,7 +264,12 @@ public class MainActivity extends AppCompatActivity {
                         if (pinnedIndex != -1) {
                             pinned = c.getInt(pinnedIndex) != 0;
                         }
-                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website, pinned));
+                        long createdAt = 0L, updatedAt = 0L;
+                        int createdIdx = c.getColumnIndex(COLUMN_CREATED_AT);
+                        if (createdIdx != -1) createdAt = c.getLong(createdIdx);
+                        int updatedIdx = c.getColumnIndex(COLUMN_UPDATED_AT);
+                        if (updatedIdx != -1) updatedAt = c.getLong(updatedIdx);
+                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website, pinned, createdAt, updatedAt));
                     } catch (Exception perRow) {
                         // یک رکورد خراب نباید جلوی خواندن بقیه‌ی رکوردها را بگیرد؛
                         // فقط با پرچم خطا ادامه می‌دهیم تا UI اطلاع‌رسانی کند.
@@ -260,6 +300,9 @@ public class MainActivity extends AppCompatActivity {
         private List<VaultItem> fullList = new ArrayList<>();
         private List<VaultItem> displayList = new ArrayList<>();
         private OnItemClickListener listener;
+        private String lastQuery = "";
+        /** 0=پیش‌فرض (ترتیب ثبت)، 1=عنوان، 2=دسته‌بندی، 3=آخرین به‌روزرسانی */
+        private int sortMode = 0;
 
         public VaultAdapter(OnItemClickListener listener) {
             this.listener = listener;
@@ -267,28 +310,77 @@ public class MainActivity extends AppCompatActivity {
 
         public void setItems(List<VaultItem> items) {
             this.fullList = new ArrayList<>(items);
-            this.displayList = new ArrayList<>(items);
-            notifyDataSetChanged();
+            applyFilterAndSort();
+        }
+
+        public void setSortMode(int mode) {
+            this.sortMode = mode;
+            applyFilterAndSort();
+        }
+
+        public int getSortMode() {
+            return sortMode;
+        }
+
+        /** نسخه‌ی محافظت‌شده از کل آیتم‌ها (برای گزارش سلامت) — بدون اعمال فیلتر. */
+        public List<VaultItem> getFullSnapshot() {
+            return new ArrayList<>(fullList);
         }
 
         public void filter(String query) {
-            displayList.clear();
-            if (query == null || query.trim().isEmpty()) {
-                displayList.addAll(fullList);
+            this.lastQuery = query == null ? "" : query;
+            applyFilterAndSort();
+        }
+
+        /** فیلتر + مرتب‌سازی روی displayList؛ پین‌شده‌ها در هر حالتِ مرتب‌سازی بالا می‌مانند. */
+        private void applyFilterAndSort() {
+            List<VaultItem> out = new ArrayList<>();
+            String q = lastQuery.toLowerCase(Locale.ROOT); // Locale.ROOT: case-folding وابسته به زبان سیستم نباشد
+            if (q.trim().isEmpty()) {
+                out.addAll(fullList);
             } else {
-                // Locale.ROOT: case-folding وابسته به زبان سیستم نباشد (مثلاً مشکل ı ترکی)
-                String q = query.toLowerCase(Locale.ROOT);
                 for (VaultItem it : fullList) {
                     if (containsIgnoreCase(it.getTitle(), q) ||
                         containsIgnoreCase(it.getUsername(), q) ||
                         containsIgnoreCase(it.getCategory(), q) ||
                         containsIgnoreCase(it.getNotes(), q) ||
                         containsIgnoreCase(it.getWebsite(), q)) {
-                        displayList.add(it);
+                        out.add(it);
                     }
                 }
             }
+            sortDisplayList(out);
+            displayList = out;
             notifyDataSetChanged();
+        }
+
+        private void sortDisplayList(List<VaultItem> list) {
+            final java.text.Collator collator = java.text.Collator.getInstance(new Locale("fa"));
+            java.util.Collections.sort(list, (a, b) -> {
+                if (a.isPinned() != b.isPinned()) return a.isPinned() ? -1 : 1;
+                switch (sortMode) {
+                    case 1: { // عنوان (الفبای فارسی‌آگاه)
+                        int c = collator.compare(nz(a.getTitle()), nz(b.getTitle()));
+                        return c != 0 ? c : Long.compare(a.getCreatedAt(), b.getCreatedAt());
+                    }
+                    case 2: { // دسته‌بندی، سپس عنوان
+                        int c = collator.compare(nz(a.getCategory()).toUpperCase(Locale.ROOT),
+                                nz(b.getCategory()).toUpperCase(Locale.ROOT));
+                        if (c != 0) return c;
+                        return collator.compare(nz(a.getTitle()), nz(b.getTitle()));
+                    }
+                    case 3: { // آخرین به‌روزرسانی (جدید اول)
+                        return Long.compare(refTime(b), refTime(a));
+                    }
+                    default:
+                        return 0; // پیش‌فرض: ترتیب ثبت (از DB: پین‌ها اول، بعد rowid)
+                }
+            });
+        }
+
+        private String nz(String s) { return s == null ? "" : s; }
+        private long refTime(VaultItem it) {
+            return it.getUpdatedAt() > 0 ? it.getUpdatedAt() : it.getCreatedAt();
         }
 
         @NonNull
@@ -362,8 +454,16 @@ public class MainActivity extends AppCompatActivity {
             tvTotpDisplay.setVisibility(View.GONE);
             root.addView(tvTotpDisplay);
 
+            // خط «آخرین به‌روزرسانی» — پایین کارت، فقط وقتی تاریخ معلوم باشد
+            TextView tvUpdated = new TextView(ctx);
+            tvUpdated.setTextSize(11f);
+            tvUpdated.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
+            tvUpdated.setPadding(0, 8, 0, 0);
+            tvUpdated.setVisibility(View.GONE);
+            root.addView(tvUpdated);
+
             card.addView(root);
-            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay);
+            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated);
         }
 
         @Override
@@ -371,6 +471,15 @@ public class MainActivity extends AppCompatActivity {
             VaultItem item = displayList.get(position);
             holder.ivPin.setVisibility(item.isPinned() ? View.VISIBLE : View.GONE);
             holder.tvTitle.setText(item.getTitle());
+
+            // نمایش «آخرین به‌روزرسانی» (و در نبودش «تاریخ ساخت») در پایین کارت
+            long refTs = item.getUpdatedAt() > 0 ? item.getUpdatedAt() : item.getCreatedAt();
+            if (refTs > 0) {
+                holder.tvUpdated.setText((isPersian ? "به‌روزرسانی: " : "updated: ") + formatVaultDate(refTs));
+                holder.tvUpdated.setVisibility(View.VISIBLE);
+            } else {
+                holder.tvUpdated.setVisibility(View.GONE);
+            }
 
             String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
             holder.tvCategory.setText(cat);
@@ -427,9 +536,9 @@ public class MainActivity extends AppCompatActivity {
         public class ViewHolder extends RecyclerView.ViewHolder {
             MaterialCardView card;
             ImageView ivPin;
-            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay;
+            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated;
 
-            public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u, TextView m, TextView totp) {
+            public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u, TextView m, TextView totp, TextView updated) {
                 super(itemView);
                 card = (MaterialCardView) itemView;
                 ivPin = pin;
@@ -438,6 +547,7 @@ public class MainActivity extends AppCompatActivity {
                 tvUsername = u;
                 tvMasked = m;
                 tvTotpDisplay = totp;
+                tvUpdated = updated;
             }
         }
 
@@ -452,6 +562,7 @@ public class MainActivity extends AppCompatActivity {
     private CryptoManager cryptoManager;
     private EditText etSearch;
     private MaterialButton btnAbout;
+    private MaterialButton btnMore;
     private MaterialButton btnLanguage;
     private MaterialButton btnThemeToggle;
     private TextView tvAppTitle;
@@ -536,10 +647,13 @@ public class MainActivity extends AppCompatActivity {
         etSearch = findViewById(R.id.etSearch);
         fabAdd = findViewById(R.id.fabAdd);
         btnAbout = findViewById(R.id.btnAbout);
+        btnMore = findViewById(R.id.btnMore);
         btnLanguage = findViewById(R.id.btnLanguage);
         btnThemeToggle = findViewById(R.id.btnThemeToggle);
+        if (btnMore != null) btnMore.setOnClickListener(v -> showVaultOptionsMenu());
 
         adapter = new VaultAdapter(item -> showEditOrDeleteDialog(item));
+        adapter.setSortMode(prefs.getInt("vault_sort_mode", 0));
         if (rvVault != null) {
             rvVault.setLayoutManager(new LinearLayoutManager(this));
             rvVault.setAdapter(adapter);
@@ -728,6 +842,11 @@ public class MainActivity extends AppCompatActivity {
             btnAbout.setBackgroundTintList(ColorStateList.valueOf(cardBg));
             btnAbout.setStrokeColor(ColorStateList.valueOf(strokeColor));
             btnAbout.setTextColor(textColor);
+        }
+        if (btnMore != null) {
+            btnMore.setBackgroundTintList(ColorStateList.valueOf(cardBg));
+            btnMore.setStrokeColor(ColorStateList.valueOf(strokeColor));
+            btnMore.setIconTint(ColorStateList.valueOf(textColor));
         }
         if (btnLanguage != null) {
             btnLanguage.setBackgroundTintList(ColorStateList.valueOf(cardBg));
@@ -999,7 +1118,10 @@ public class MainActivity extends AppCompatActivity {
             String id = existingItem != null ? existingItem.getId() : UUID.randomUUID().toString();
             // حالت پین در ویرایش حفظ می‌شود (تغییر پین فقط از طریق اسوایپ انجام می‌شود)
             boolean keepPinned = existingItem != null && existingItem.isPinned();
-            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website, keepPinned);
+            long nowTs = System.currentTimeMillis();
+            long createdTs = existingItem != null && existingItem.getCreatedAt() > 0
+                    ? existingItem.getCreatedAt() : nowTs;
+            VaultItem item = new VaultItem(id, title, category, username, password, notes, totp, website, keepPinned, createdTs, nowTs);
 
             if (!totp.isEmpty() && !TotpGenerator.isValidSecret(totp)) {
                 Toast.makeText(this, isPersian
@@ -1349,6 +1471,150 @@ public class MainActivity extends AppCompatActivity {
         lastCopiedText = null;
     }
 
+    // ================= منوی بیشتر: ترتیب لیست + گزارش سلامت رمزها =================
+
+    private void showVaultOptionsMenu() {
+        String[] opts = isPersian
+                ? new String[]{"گزارش سلامت رمزها", "ترتیب لیست"}
+                : new String[]{"Password Health Report", "List Order"};
+        new AlertDialog.Builder(this)
+                .setTitle(isPersian ? "بیشتر" : "More")
+                .setItems(opts, (d, which) -> {
+                    if (which == 0) showPasswordHealthDialog();
+                    else showSortDialog();
+                })
+                .show();
+    }
+
+    private void showSortDialog() {
+        String[] opts = isPersian
+                ? new String[]{"پیش‌فرض (ترتیب ثبت)", "عنوان (الفبا)", "دسته‌بندی", "آخرین به‌روزرسانی (جدید اول)"}
+                : new String[]{"Default (creation order)", "Title (A-Z)", "Category", "Recently updated first"};
+        new AlertDialog.Builder(this)
+                .setTitle(isPersian ? "ترتیب لیست" : "List Order")
+                .setSingleChoiceItems(opts, adapter != null ? adapter.getSortMode() : 0, (d, which) -> {
+                    prefs.edit().putInt("vault_sort_mode", which).apply();
+                    if (adapter != null) adapter.setSortMode(which);
+                    d.dismiss();
+                })
+                .show();
+    }
+
+    private static final long STALE_AFTER_MS = 180L * 24 * 60 * 60 * 1000;
+
+    /**
+     * گزارش سلامت — کاملاً آفلاین و محلی؛ از روی آیتم‌های decrypt‌شده در حافظه ساخته
+     * می‌شود و هیچ داده‌ای از دستگاه خارج نمی‌شود:
+     *  - رمزهای تکراری (خطر اصلی: شکستن یکی = ورود به همه)
+     *  - رمزهای ضعیف (آنتروپی شانون کم یا الگوی ساده)
+     *  - رمزهای کهنه (بیش از ۱۸۰ روز به‌روزرسانی‌نشده)
+     */
+    private void showPasswordHealthDialog() {
+        if (adapter == null) return;
+        List<VaultItem> items = adapter.getFullSnapshot();
+
+        java.util.LinkedHashMap<String, List<String>> byPassword = new java.util.LinkedHashMap<>();
+        List<String> weakTitles = new ArrayList<>();
+        List<String> staleLines = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (VaultItem it : items) {
+            String pw = it.getPassword();
+            if (pw == null || pw.isEmpty()) continue;
+            byPassword.computeIfAbsent(pw, k -> new ArrayList<>()).add(healthTitleOf(it));
+            if (isWeakPassword(pw)) weakTitles.add(healthTitleOf(it));
+            long ref = it.getUpdatedAt() > 0 ? it.getUpdatedAt() : it.getCreatedAt();
+            if (ref > 0 && now - ref > STALE_AFTER_MS) {
+                staleLines.add(healthTitleOf(it) + " (" + ((int) ((now - ref) / (24L * 3600 * 1000)))
+                        + (isPersian ? " روز)" : " days)"));
+            }
+        }
+
+        List<List<String>> dupGroups = new ArrayList<>();
+        int dupItems = 0;
+        for (List<String> g : byPassword.values()) {
+            if (g.size() > 1) { dupGroups.add(g); dupItems += g.size(); }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(isPersian ? "بررسی " + items.size() + " آیتم:\n\n"
+                            : "Checked " + items.size() + " item(s):\n\n");
+        boolean anyIssue = false;
+        if (!dupGroups.isEmpty()) {
+            anyIssue = true;
+            sb.append(isPersian ? "🔴 رمز تکراری — " + dupItems + " آیتم در " + dupGroups.size() + " گروه:\n"
+                                : "🔴 Reused passwords — " + dupItems + " items in " + dupGroups.size() + " group(s):\n");
+            int shown = 0;
+            for (List<String> g : dupGroups) {
+                if (shown++ >= 5) { sb.append(isPersian ? "… و " + (dupGroups.size() - shown + 1) + " گروه دیگر\n" : "… and " + (dupGroups.size() - shown + 1) + " more group(s)\n"); break; }
+                sb.append("   ").append(String.join(isPersian ? "، " : ", ", g)).append("\n");
+            }
+        }
+        if (!weakTitles.isEmpty()) {
+            anyIssue = true;
+            sb.append(isPersian ? "🟠 رمز ضعیف — " + weakTitles.size() + " آیتم:\n" : "🟠 Weak passwords — " + weakTitles.size() + " item(s):\n");
+            for (int i = 0; i < Math.min(6, weakTitles.size()); i++) sb.append("   ").append(weakTitles.get(i)).append("\n");
+            if (weakTitles.size() > 6) sb.append(isPersian ? "   … و " + (weakTitles.size() - 6) + " مورد دیگر\n" : "   … and " + (weakTitles.size() - 6) + " more\n");
+        }
+        if (!staleLines.isEmpty()) {
+            anyIssue = true;
+            sb.append(isPersian ? "🟡 بیش از ۱۸۰ روز بی‌تغییر — " + staleLines.size() + " آیتم:\n"
+                                : "🟡 Unchanged for 180+ days — " + staleLines.size() + " item(s):\n");
+            for (int i = 0; i < Math.min(6, staleLines.size()); i++) sb.append("   ").append(staleLines.get(i)).append("\n");
+            if (staleLines.size() > 6) sb.append(isPersian ? "   … و " + (staleLines.size() - 6) + " مورد دیگر\n" : "   … and " + (staleLines.size() - 6) + " more\n");
+        }
+        if (!anyIssue) {
+            sb.append(isPersian ? "✅ همه‌چیز سالم است — بدون تکرار، بدون رمز ضعیف، بدون مورد کهنه."
+                                : "✅ All good — no reuse, no weak passwords, nothing stale.");
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(isPersian ? "گزارش سلامت رمزها" : "Password Health Report")
+                .setMessage(sb.toString())
+                .setPositiveButton(isPersian ? "بستن" : "Close", null)
+                .show();
+    }
+
+    private String healthTitleOf(VaultItem it) {
+        String t = it.getTitle();
+        return (t == null || t.isEmpty()) ? (isPersian ? "بی‌نام" : "untitled") : t;
+    }
+
+    /** سنجش ساده و محافظه‌کارانه: طول + آنتروپی شانون + الگوی تک‌کلاسه. */
+    static boolean isWeakPassword(String pw) {
+        if (pw.length() < 10) return true;
+        if (shannonEntropyBits(pw) < 45) return true;
+        boolean allDigits = true, allLower = true;
+        for (char c : pw.toCharArray()) {
+            if (!Character.isDigit(c)) allDigits = false;
+            if (!(c >= 'a' && c <= 'z')) allLower = false;
+            if (!allDigits && !allLower) break;
+        }
+        return (allDigits || allLower) && pw.length() < 16;
+    }
+
+    static double shannonEntropyBits(String s) {
+        java.util.HashMap<Character, Integer> freq = new java.util.HashMap<>();
+        for (char c : s.toCharArray()) freq.merge(c, 1, Integer::sum);
+        int n = s.length();
+        double h = 0;
+        for (int cnt : freq.values()) {
+            double p = (double) cnt / n;
+            h -= p * (Math.log(p) / Math.log(2));
+        }
+        return h * n;
+    }
+
+    /** تاریخ کوتاه برای خط «به‌روزرسانی» کارت (جلالی برای فارسی، از طریق ICU). */
+    private String formatVaultDate(long millis) {
+        try {
+            Locale loc = isPersian ? new Locale("fa") : Locale.US;
+            return java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, loc)
+                    .format(new java.util.Date(millis));
+        } catch (Exception e) {
+            return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new java.util.Date(millis));
+        }
+    }
+
     // ================= پین (اسوایپ چپ = پین / اسوایپ راست = آن‌پین) =================
 
     private void handlePinSwipe(RecyclerView.ViewHolder viewHolder, int direction) {
@@ -1630,6 +1896,8 @@ public class MainActivity extends AppCompatActivity {
             o.put("totp", it.getTotpSecret());
             o.put("website", it.getWebsite());
             o.put("pinned", it.isPinned());
+            o.put("created_at", it.getCreatedAt());
+            o.put("updated_at", it.getUpdatedAt());
             arr.put(o);
         }
         root.put("item_count", arr.length());
@@ -1722,7 +1990,9 @@ public class MainActivity extends AppCompatActivity {
                             o.optString("notes"),
                             o.optString("totp"),
                             o.optString("website"),
-                            o.optBoolean("pinned", false)));
+                            o.optBoolean("pinned", false),
+                            o.optLong("created_at", 0L),
+                            o.optLong("updated_at", 0L)));
                 }
                 final int count = items.size();
                 runOnUiThread(() -> {
