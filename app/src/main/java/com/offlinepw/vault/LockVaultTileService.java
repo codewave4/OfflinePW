@@ -17,6 +17,13 @@ public class LockVaultTileService extends TileService {
     public void onClick() {
         super.onClick();
         VaultSession.clear();
+        // MainActivity اگر زنده و در پس‌زمینه باشد: رکوردهای decrypt‌شده و کانکشن
+        // DB فوراً پاک/بسته شوند (منتظر GC نمانیم).
+        try {
+            sendBroadcast(new Intent(MainActivity.ACTION_SESSION_LOCKED)
+                    .setPackage(getPackageName()));
+        } catch (Exception ignored) {
+        }
         Intent intent = new Intent(this, AuthActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         if (Build.VERSION.SDK_INT >= 34) {

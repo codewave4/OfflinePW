@@ -127,6 +127,16 @@ public class AuthActivity extends AppCompatActivity {
             });
         }
 
+        if (etDecoyPassword != null) {
+            etDecoyPassword.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    attemptSubmit();
+                    return true;
+                }
+                return false;
+            });
+        }
+
         // اگر در مرحله‌ی «تأیید رمز» بودیم و صفحه چرخید، رمز مرحله اول هرگز در
         // حافظه‌ی ماندگار ذخیره نمی‌شود (سیاست امنیتی)؛ به‌جای گیج‌کننده بودن،
         // به کاربر می‌گوییم که پروسه از نو شروع می‌شود.
@@ -292,34 +302,22 @@ public class AuthActivity extends AppCompatActivity {
 
                 final String wrappedDek = wrapDek(dek, kek);
 
-                // ── ولت فریبنده ──
-                // کلید دوم کاملاً مستقل: salt و DEK و wrapped-dek خودش. اگر رمز فریبنده
-                // داده نشده باشد هیچ اثری از این مسیر در prefs/دیسک نمی‌ماند.
+// ── ولت فریبنده (نسل دوم: بدون ردپا در prefs) ──
+                // کلید دوم هیچ‌جا ذخیره نمی‌شود؛ مستقیماً با همان PBKDF2 روی saltِ
+                // مشتق‌شده از salt اصلی ساخته می‌شود. تنها «اثر» روی دیسک، فایل DB
+                // فریبنده با نام خنثی است. (ردیف‌های wrapped نسل یکم در prefs فقط
+                // برای سازگاریِ بازکردن خوانده می‌شوند؛ ساخت جدید چیزی نمی‌نویسد.)
                 final boolean hasDecoy = decoyPassword != null && !decoyPassword.isEmpty();
-                final SecretKey dek2;
-                final String wrappedDek2;
-                final byte[] salt2;
-                if (hasDecoy) {
-                    salt2 = generateRandomBytes(SALT_LENGTH_BYTES);
-                    SecretKey kek2 = deriveKek(decoyPassword, salt2);
-                    KeyGenerator dekGen2 = KeyGenerator.getInstance("AES");
-                    dekGen2.init(DEK_LENGTH_BITS, new SecureRandom());
-                    dek2 = dekGen2.generateKey();
-                    wrappedDek2 = wrapDek(dek2, kek2);
-                } else {
-                    dek2 = null; wrappedDek2 = null; salt2 = null;
-                }
+                final SecretKey dek2 = hasDecoy
+                        ? deriveDekDirect(decoyPassword, deriveDecoySalt(salt))
+                        : null;
 
-                final android.content.SharedPreferences.Editor ed = authPrefs.edit();
-                ed.putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                authPrefs.edit()
+                        .putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
                         .putString(KEY_WRAPPED_DEK, wrappedDek)
                         .putBoolean(KEY_IS_SETUP, true)
-                        .putInt(KEY_FAILED_ATTEMPTS, 0);
-                if (hasDecoy) {
-                    ed.putString(KEY_RECOVERY_SALT, Base64.encodeToString(salt2, Base64.NO_WRAP))
-                            .putString(KEY_RECOVERY_WRAPPED_DEK, wrappedDek2);
-                }
-                ed.commit();
+                        .putInt(KEY_FAILED_ATTEMPTS, 0)
+                        .commit();
 
                 // دیتابیس فریبنده با چند آیتمِ باورپذیرِ بی‌خطر پر می‌شود تا
                 // «خالی بودن» زیر سؤال نبرد؛ خطایش نباید ساخت ولت اصلی را متوقف کند.
@@ -369,7 +367,8 @@ public class AuthActivity extends AppCompatActivity {
                         r[5], r[6], false, now - age, now - age), crypto);
             }
             helper.close();
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
+            // هیچ خطایی (حتی Error سطح native DB) نباید ساخت ولت اصلی را متوقف کند.
         } finally {
             VaultSession.setDecoy(false);
         }
@@ -393,35 +392,23 @@ public class AuthActivity extends AppCompatActivity {
                 byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
                 SecretKey kek = deriveKek(password, salt);
                 unlocked = unwrapDek(wrappedDek, kek);
-            } catch (Exception primaryFail) {
-                // اگر ولت فریبنده تنظیم شده باشد، همین رمز ورودی روی کلید دوم هم
-                // امتحان می‌شود. هیچ پیام یا مسیر زمان‌بندی متفاوتی وجود ندارد که
-                // «رمز دوم» را لو بدهد؛ شکست هر دو = همان «رمز اشتباه» همیشگی.
-                String rSaltB64 = authPrefs.getString(KEY_RECOVERY_SALT, "");
-                String rWrapped = authPrefs.getString(KEY_RECOVERY_WRAPPED_DEK, "");
-                if (rSaltB64.isEmpty() || rWrapped.isEmpty()) {
-                    runOnUiThread(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        setUnlockButtonBusy(false);
-                        if (etMasterPassword != null) etMasterPassword.setText("");
-                        registerFailedAttempt();
-                    });
-                    return;
-                }
-                try {
-                    byte[] salt2 = Base64.decode(rSaltB64, Base64.NO_WRAP);
-                    SecretKey kek2 = deriveKek(password, salt2);
-                    unlocked = unwrapDek(rWrapped, kek2);
-                    decoyHit = true;
-                } catch (Exception decoyFail) {
-                    runOnUiThread(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        setUnlockButtonBusy(false);
-                        if (etMasterPassword != null) etMasterPassword.setText("");
-                        registerFailedAttempt();
-                    });
-                    return;
-                }
+            } catch (Throwable primaryFail) {
+                // رمز اصلی نشد — همین ورودی روی ولت فریبنده هم امتحان می‌شود. اگر
+                // تنظیم نشده باشد (فایلش نیست) شکست آنی و بی‌صداست؛ پیام و
+                // زمان‌بندی قابل تشخیص از «حالت بدون فریبنده» نیست.
+                // Throwable نه Exception: خطاهای نادرِ native/prefs هم به «رمز
+                // اشتباه» تبدیل می‌شوند، نه force-close.
+                try { unlocked = tryDecoyUnlock(password); } catch (Throwable t) { unlocked = null; }
+                decoyHit = unlocked != null;
+            }
+            if (unlocked == null) {
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    setUnlockButtonBusy(false);
+                    if (etMasterPassword != null) etMasterPassword.setText("");
+                    registerFailedAttempt();
+                });
+                return;
             }
             final SecretKey dek = unlocked;
             final boolean wasDecoy = decoyHit;
@@ -437,6 +424,68 @@ public class AuthActivity extends AppCompatActivity {
                 proceedToMain();
             });
         }).start();
+    }
+
+    /** salt ولت فریبنده = تراشیده‌ی SHA-256(salt اصلی + برچسب دامنه) — قابل بازسازی، بدون ذخیره. */
+    private static byte[] deriveDecoySalt(byte[] masterSalt) throws Exception {
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        md.update(masterSalt);
+        md.update("offlinepw-decoy-kdf-v1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return java.util.Arrays.copyOf(md.digest(), SALT_LENGTH_BYTES);
+    }
+
+    /** DEK ولت فریبنده — مستقیماً از خودِ رمز با همان PBKDF2؛ هیچ wrapped بلابی نیست. */
+    private static SecretKey deriveDekDirect(String password, byte[] salt) throws Exception {
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, DEK_LENGTH_BITS);
+        try {
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            return new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
+        } finally {
+            spec.clearPassword();
+        }
+    }
+
+    /**
+     * تلاش بازکردن ولت فریبنده؛ null یعنی شکست. اعتبارسنجی = باز شدن خودِ DB با
+     * کلید مشتق‌شده (SQLCipher با کلید غلط می‌شکند → catch → null). ردیف‌های
+     * wrapped نسل‌یکم اگر در prefs باشند، همان مسیر قدیمی استفاده می‌شود.
+     */
+    private SecretKey tryDecoyUnlock(String password) {
+        MainActivity.VaultDatabaseHelper helper = null;
+        boolean ok = false;
+        SecretKey dek2 = null;
+        try {
+            MainActivity.VaultDatabaseHelper.ensureDecoyMigration(this);
+            if (!getDatabasePath(MainActivity.VaultDatabaseHelper.DECOY_DB_NAME).exists()) return null;
+
+            String rSaltB64 = authPrefs.getString(KEY_RECOVERY_SALT, "");
+            String rWrapped = authPrefs.getString(KEY_RECOVERY_WRAPPED_DEK, "");
+            if (!rSaltB64.isEmpty() && !rWrapped.isEmpty()) {
+                dek2 = unwrapDek(rWrapped, deriveKek(password, Base64.decode(rSaltB64, Base64.NO_WRAP)));
+            } else {
+                byte[] masterSalt = Base64.decode(authPrefs.getString(KEY_KEK_SALT, ""), Base64.NO_WRAP);
+                dek2 = deriveDekDirect(password, deriveDecoySalt(masterSalt));
+            }
+
+            VaultSession.setDecoy(true);
+            helper = new MainActivity.VaultDatabaseHelper(this);
+            net.sqlcipher.database.SQLiteDatabase db = helper.getWritableDatabase(
+                    Base64.encodeToString(dek2.getEncoded(), Base64.NO_WRAP));
+            android.database.Cursor c = db.rawQuery("SELECT COUNT(*) FROM sqlite_master", null);
+            try {
+                ok = c.moveToNext();
+            } finally {
+                c.close();
+            }
+            return ok ? dek2 : null;
+        } catch (Throwable t) {
+            return null; // کلید غلط / فایل ناپدید / هر خطای دیگر → فقط «رمز اشتباه»
+        } finally {
+            if (helper != null) {
+                try { helper.close(); } catch (Exception ignored) { }
+            }
+            if (!ok) VaultSession.setDecoy(false);
+        }
     }
 
     /**
@@ -481,9 +530,16 @@ public class AuthActivity extends AppCompatActivity {
         File dbDir = null;
         try {
             deleteDatabase(DB_NAME);
-            deleteDatabase(DECOY_DB_NAME); // ولت فریبنده (اگر باشد) هم؛ اگر نباشد no-op
         } catch (Exception ignored) {
             wipeOk = false;
+        }
+        // فایل‌های ولت فریبنده (نسل دوم و نسل یکم) — نبودنشان خطا نیست
+        for (String decoyDb : new String[]{DECOY_DB_NAME,
+                MainActivity.VaultDatabaseHelper.LEGACY_DECOY_DB_NAME}) {
+            try {
+                deleteDatabase(decoyDb);
+            } catch (Exception ignored) {
+            }
         }
         // ۲) حذف هر فایل باقیمانده در پوشهی databases
         try {
@@ -501,8 +557,15 @@ public class AuthActivity extends AppCompatActivity {
         }
         // ۲.۱) verify: هیچ اثری از دیتابیس (شامل فایلهای جانبی) باقی نمانده باشد
         if (dbDir != null) {
-            for (String name : new String[]{DB_NAME, DB_NAME + "-wal", DB_NAME + "-shm", DB_NAME + "-journal",
-                    DECOY_DB_NAME, DECOY_DB_NAME + "-wal", DECOY_DB_NAME + "-shm", DECOY_DB_NAME + "-journal"}) {
+            java.util.List<String> wipeNames = new java.util.ArrayList<>();
+            for (String base : new String[]{DB_NAME, DECOY_DB_NAME,
+                    MainActivity.VaultDatabaseHelper.LEGACY_DECOY_DB_NAME}) {
+                wipeNames.add(base);
+                wipeNames.add(base + "-wal");
+                wipeNames.add(base + "-shm");
+                wipeNames.add(base + "-journal");
+            }
+            for (String name : wipeNames) {
                 if (new File(dbDir, name).exists()) wipeOk = false;
             }
         }

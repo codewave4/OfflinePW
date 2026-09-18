@@ -20,6 +20,17 @@ public class OfflinePWApplication extends Application {
     public void onCreate() {
         super.onCreate();
         setNightModeFromPrefs(this);
+        // کتابخانه‌ی native سکیور‌سیفیر باید اولِ عمر پروسه لود شود: AuthActivity
+        // هنگام ساخت ولت فریبنده (قبل از دیدن MainActivity) فایل DB می‌سازد و
+        // loadLibs تنها داخل MainActivity.onCreate بود — روی پروسه‌ی تازه
+        // آن مسیر UnsatisfiedLinkError (خطای سطح Error، نه Exception) می‌داد
+        // و باعث کرش‌های «گاهی هنگام وارد کردن رمز» می‌شد.
+        try {
+            net.sqlcipher.database.SQLiteDatabase.loadLibs(this);
+        } catch (Throwable ignored) {
+            // اگر لود شکست بخورد، MainActivity همان مسیر را تکرار می‌کند و
+            // خطا در مصرف DB به‌صورت toast قابل‌درک گزارش می‌شود.
+        }
     }
 
     /**

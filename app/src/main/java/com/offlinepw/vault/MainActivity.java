@@ -148,8 +148,27 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_ARCHIVED = "archived";
         public static final String TABLE_LOG = "activity_log";
 
-        /** فایل دیتابیس ولت فریبنده — ساختار دقیقاً یکسان، کلید و محتوا جدا. */
-        public static final String DECOY_DB_NAME = "offline_pw_vault_b.db";
+        /** فایل دیتابیس ولت فریبنده — نام عمداً خنثی، تا در فهرست فایل‌ها
+         *  «ولت دوم» را لو ندهد (افکت جانبیِ مثبت: برای خودِ سیستم هم کش معمولی‌ست). */
+        public static final String DECOY_DB_NAME = "metrics_cache.db";
+        /** نام نسل‌یکم (ساخته‌شده با wrapped-dek در prefs) — فقط migrate/پاک می‌شود. */
+        public static final String LEGACY_DECOY_DB_NAME = "offline_pw_vault_b.db";
+
+        /** اگر فایل فریبنده‌ی نسل‌یکم باشد و تازه نباشد، یک‌بار rename می‌شود. */
+        public static void ensureDecoyMigration(Context context) {
+            try {
+                File legacy = context.getDatabasePath(LEGACY_DECOY_DB_NAME);
+                File fresh = context.getDatabasePath(DECOY_DB_NAME);
+                if (legacy.exists() && !fresh.exists()) {
+                    legacy.renameTo(fresh);
+                    context.getDatabasePath(LEGACY_DECOY_DB_NAME + "-wal").renameTo(
+                            context.getDatabasePath(DECOY_DB_NAME + "-wal"));
+                    context.getDatabasePath(LEGACY_DECOY_DB_NAME + "-shm").renameTo(
+                            context.getDatabasePath(DECOY_DB_NAME + "-shm"));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
 
         public VaultDatabaseHelper(Context context) {
             super(context, com.offlinepw.vault.crypto.VaultSession.isDecoy()
@@ -715,6 +734,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** برادکست داخلیِ قفل نشست (از LockVaultTileService) — see scrub below. */
+    public static final String ACTION_SESSION_LOCKED = "com.offlinepw.vault.SESSION_LOCKED";
+    private volatile boolean sessionExternallyLocked = false;
+    private final android.content.BroadcastReceiver sessionLockReceiver = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(android.content.Context ctx, android.content.Intent intent) {
+            sessionExternallyLocked = true;
+            runOnUiThread(() -> {
+                // در بک‌گراند اجازه‌ی راه‌اندازی اکتیویتی نیست، ولی همین‌جا می‌توان
+                // رکوردهای decrypt‌شده و کانکشن DB را آزاد کرد؛ ناوبری به احراز
+                // هویت در onStart بعدی انجام می‌شود.
+                try {
+                    if (adapter != null) adapter.setItems(new ArrayList<>());
+                    archivedItems = new ArrayList<>();
+                    if (dbHelper != null) dbHelper.close();
+                } catch (Exception ignored) {
+                }
+            });
+        }
+    };
+
     private VaultAdapter adapter;
     private VaultDatabaseHelper dbHelper;
     private CryptoManager cryptoManager;
@@ -801,7 +841,18 @@ public class MainActivity extends AppCompatActivity {
         SQLiteDatabase.loadLibs(this);
 
         cryptoManager = new CryptoManager();
+        VaultDatabaseHelper.ensureDecoyMigration(this);
         dbHelper = new VaultDatabaseHelper(this);
+        try {
+            android.content.IntentFilter lockFilter =
+                    new android.content.IntentFilter(ACTION_SESSION_LOCKED);
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(sessionLockReceiver, lockFilter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(sessionLockReceiver, lockFilter);
+            }
+        } catch (Exception ignored) {
+        }
 
         mainRootLayout = findViewById(R.id.mainRootLayout);
         appBarLayout = findViewById(R.id.appBarLayout);
@@ -955,6 +1006,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        if (sessionExternallyLocked || !com.offlinepw.vault.crypto.VaultSession.hasDek()) {
+            // نشست بیرون از این اکتیویتی قفل شده (QS Tile یا سیاست auto-lock) —
+            // scrub کامل + بازگشت به احراز هویت، قبل از هر تلاشی برای load کردن داده.
+            sessionExternallyLocked = false;
+            lockVaultNow();
+            return;
+        }
         totpHandler.post(totpRunnable);
         cancelAutoLock();
         // اگر کلیپی متعلق به ما در کلیپ‌بورد مانده (مثلاً پروسه در میانه‌ی
@@ -972,6 +1030,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        try {
+            unregisterReceiver(sessionLockReceiver);
+        } catch (Exception ignored) {
+        }
         totpHandler.removeCallbacks(totpRunnable);
         totpHandler.removeCallbacks(autoLockRunnable);
         clipboardClearHandler.removeCallbacksAndMessages(null);
@@ -2724,8 +2786,8 @@ public class MainActivity extends AppCompatActivity {
         JSONObject root = new JSONObject();
         root.put("format", "offlinepw-backup-v1-vault");
         root.put("app", "OfflinePW");
-        // برچسب نوع ولت — هنگام import اگر با نشست فعلی نخواند هشدار داده می‌شود
-        root.put("vault_kind", com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "decoy" : "primary");
+        // برچسب نوع ولت — خنثی و بدون کلمه‌ی «decoy» در فایل؛ فقط برای هشدار import
+        root.put("vault_kind", com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "b" : "a");
         root.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
                 .format(new java.util.Date()));
         JSONArray arr = new JSONArray();
@@ -2821,7 +2883,10 @@ public class MainActivity extends AppCompatActivity {
                 if (!"offlinepw-backup-v1-vault".equals(root.optString("format", ""))) {
                     throw new IllegalArgumentException("bad backup format");
                 }
-                final String backupKind = root.optString("vault_kind", "");
+                String bk = root.optString("vault_kind", "");
+                if ("primary".equals(bk)) bk = "a";       // سازگاری با فایل‌های قدیمی
+                else if ("decoy".equals(bk)) bk = "b";
+                final String backupKind = bk;
                 JSONArray arr = root.getJSONArray("items");
                 List<VaultItem> items = new ArrayList<>();
                 for (int i = 0; i < arr.length(); i++) {
@@ -2845,7 +2910,7 @@ public class MainActivity extends AppCompatActivity {
                     dialog.dismiss();
                     busyButton.setEnabled(true);
                     String kindWarn = "";
-                    String expectedKind = com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "decoy" : "primary";
+                    String expectedKind = com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "b" : "a";
                     if (!backupKind.isEmpty() && !expectedKind.equals(backupKind)) {
                         kindWarn = isPersian
                                 ? "\n⚠️ این بکاپ برای ولت دیگری ساخته شده — بازیابی در ولت فعلی!"
