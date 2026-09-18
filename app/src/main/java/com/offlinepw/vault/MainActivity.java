@@ -651,7 +651,8 @@ public class MainActivity extends AppCompatActivity {
                 holder.tvUpdated.setVisibility(View.GONE);
             }
 
-            String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
+            String cat = item.getCategory() != null && !item.getCategory().isEmpty()
+                    ? item.getCategory().toUpperCase(Locale.ROOT) : "LOGIN"; // Locale.ROOT: با لوکال ترکی «İ» نشود
             holder.tvCategory.setText(cat);
             holder.tvUsername.setText(item.getUsername());
 
@@ -748,6 +749,8 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     if (adapter != null) adapter.setItems(new ArrayList<>());
                     archivedItems = new ArrayList<>();
+                    lastCopiedText = null;
+                    revealedTotpItemIds.clear();
                     if (dbHelper != null) dbHelper.close();
                 } catch (Exception ignored) {
                 }
@@ -767,7 +770,9 @@ public class MainActivity extends AppCompatActivity {
     private CoordinatorLayout mainRootLayout;
     private AppBarLayout appBarLayout;
     private FloatingActionButton fabAdd;
-    private FloatingActionButton fabBackup;
+    /** نگه‌داشتن ۲ ثانیه‌روی + = مسیر بکاپ (جایگزین دکمه‌ی جدا؛ بدون اینترنت، ذخیره با انتخاب‌گر فایل). */
+    private Runnable fabHoldRunnable;
+    private boolean fabHoldFired = false;
 
     // --- اسوایپ پین/آن‌پین ---
     private final Paint swipePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -788,7 +793,52 @@ public class MainActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                 if (uri == null) return;
                 pendingImportUri = uri;
+                // grant موقتِ نتیجه‌ی ActivityResult ممکن است قبل از خواندنِ ترد پس‌زمینه
+                // منقضی شود (بسته‌شدن اکتیویتی) → «رمز اشتباه» گمراه‌کننده. یک permission
+                // persistable می‌گیریم و بعد از مصرف آزادش می‌کنیم.
+                try {
+                    getContentResolver().takePersistableUriPermission(uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {
+                }
                 showBackupImportDialog();
+            });
+
+    private volatile byte[] pendingBackupBytes;
+    private volatile int pendingBackupCount;
+    /** ذخیره‌ی بکاپ «بدون اینترنت» با انتخاب‌گر سیستمی (Downloads/Documents هر جایی که کاربر بخواهد). */
+    private final ActivityResultLauncher<String> saveBackupLauncher =
+            registerForActivityResult(new ActivityResultContracts.CreateDocument("application/octet-stream"), uri -> {
+                final byte[] data = pendingBackupBytes;
+                final int count = pendingBackupCount;
+                pendingBackupBytes = null;
+                if (uri == null || data == null) {
+                    if (uri == null && data != null) {
+                        Toast.makeText(this, MainActivity.this.isPersian ? "ذخیره‌ی بکاپ لغو شد" : "Backup save cancelled",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                    return;
+                }
+                new Thread(() -> {
+                    try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                        if (os == null) throw new java.io.IOException("no output stream");
+                        os.write(data);
+                    } catch (Exception e) {
+                        runOnUiThread(() -> Toast.makeText(this, MainActivity.this.isPersian
+                                        ? "ذخیره‌ی فایل بکاپ ناموفق بود" : "Writing the backup file failed",
+                                Toast.LENGTH_LONG).show());
+                        return;
+                    }
+                    java.util.Arrays.fill(data, (byte) 0);
+                    try {
+                        dbHelper.logActivity("BACKUP", null);
+                    } catch (Exception ignored) {
+                    }
+                    runOnUiThread(() -> Toast.makeText(this, MainActivity.this.isPersian
+                                    ? ("بکاپ " + count + " آیتمی ذخیره شد (کاملاً آفلاین)")
+                                    : ("Backup of " + count + " item(s) saved (fully offline)"),
+                            Toast.LENGTH_LONG).show());
+                }).start();
             });
 
     private boolean isDarkMode = true;
@@ -960,9 +1010,29 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        if (fabAdd != null) fabAdd.setOnClickListener(v -> showAddDialog(null));
-        fabBackup = findViewById(R.id.fabBackup);
-        if (fabBackup != null) fabBackup.setOnClickListener(v -> showBackupSheet());
+        if (fabAdd != null) {
+            final android.os.Handler fabHoldHandler = new android.os.Handler(Looper.getMainLooper());
+            fabHoldRunnable = () -> {
+                fabHoldFired = true;
+                fabAdd.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                showBackupExportDialog();
+            };
+            fabAdd.setOnTouchListener((tv, ev) -> {
+                int a = ev.getActionMasked();
+                if (a == android.view.MotionEvent.ACTION_DOWN) {
+                    fabHoldFired = false;
+                    fabHoldHandler.removeCallbacks(fabHoldRunnable);
+                    fabHoldHandler.postDelayed(fabHoldRunnable, 2000L);
+                } else if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) {
+                    fabHoldHandler.removeCallbacks(fabHoldRunnable);
+                }
+                return false; // رویدادها به handler عادیِ FAB هم می‌رسند (کلیک = افزودن)
+            });
+            fabAdd.setOnClickListener(v -> {
+                if (fabHoldFired) { fabHoldFired = false; return; } // کلیکِ پس از رهاکردنِ نگه‌داشتن طولانی
+                showAddDialog(null);
+            });
+        }
         if (btnAbout != null) btnAbout.setOnClickListener(v -> showAboutSecurityDialog());
 
         if (btnLanguage != null) {
@@ -1080,6 +1150,13 @@ public class MainActivity extends AppCompatActivity {
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
         archivedItems = new ArrayList<>();
+        lastCopiedText = null;               // آخرین رمز کپی‌شده به‌صورت plaintext در این فیلد بود
+        revealedTotpItemIds.clear();
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("", "")); // قفل = کلیپ حساس هم برود
+        } catch (Exception ignored) {
+        }
         try {
             dbHelper.close(); // کانکشن SQLCipher استخری را ببند تا اثری از فایل در حافظه نماند
         } catch (Exception ignored) {
@@ -1865,7 +1942,10 @@ public class MainActivity extends AppCompatActivity {
             w.setBackgroundDrawable(bg);
         }
 
-        int titleId = getResources().getIdentifier("alertTitle", "id", "android");
+        // AlertController اپ‌کمپت R.id.alertTitle *خودش* را دارد (نه شناسه‌ی framework)؛
+        // پس اول از پکیج اپ جست‌وجو کن، وگرنه استایل عنوان بی‌صدا اعمال نمی‌شد.
+        int titleId = getResources().getIdentifier("alertTitle", "id", getPackageName());
+        if (titleId == 0) titleId = getResources().getIdentifier("alertTitle", "id", "android");
         int msgId = getResources().getIdentifier("message", "id", "android");
         android.widget.TextView title = titleId != 0 ? d.findViewById(titleId) : null;
         if (title != null) {
@@ -2018,8 +2098,12 @@ public class MainActivity extends AppCompatActivity {
                 v -> { sheet.dismiss(); showArchiveSheet(); }));
         root.addView(nordicDivider());
         root.addView(nordicMenuRow(isPersian ? "📓 دفترچه فعالیت" : "Activity log",
-                isPersian ? "۲۰ رویداد اخیر (رمزنگاری‌شده در ولت)" : "Last 200 events (encrypted in the vault)",
+                isPersian ? "۲۰۰ رویداد اخیر (رمزنگاری‌شده در ولت)" : "Last 200 events (encrypted in the vault)",
                 v -> { sheet.dismiss(); showActivityLogSheet(); }));
+        root.addView(nordicDivider());
+        root.addView(nordicMenuRow(isPersian ? "⬇ بازیابی از فایل بکاپ" : "Restore from backup file",
+                isPersian ? "فایل .opwb — کاملاً آفلاین" : "a .opwb file — fully offline",
+                v -> { sheet.dismiss(); openBackupLauncher.launch(new String[]{"*/*"}); }));
         sheet.show();
     }
 
@@ -2165,7 +2249,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextView tvNote = new TextView(this);
         tvNote.setText(isPersian
-                ? "۲۰ رویداد اخیر، فقط در دیتابیس رمزنگاری‌شده همین دستگاه — هیچ‌جا ارسال نمی‌شود."
+                ? "۲۰۰ رویداد اخیر، فقط در دیتابیس رمزنگاری‌شده همین دستگاه — هیچ‌جا ارسال نمی‌شود."
                 : "Last 200 events, stored only in this device's encrypted database — never sent anywhere.");
         tvNote.setTextSize(11.5f);
         tvNote.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
@@ -2255,9 +2339,13 @@ public class MainActivity extends AppCompatActivity {
                                 dbHelper.clearActivityLog();
                             } catch (Exception ignored) {
                             }
-                            runOnUiThread(() -> Toast.makeText(this,
-                                    isPersian ? "دفترچه پاک شد" : "Log cleared",
-                                    Toast.LENGTH_SHORT).show());
+                            runOnUiThread(() -> {
+                                Toast.makeText(this, isPersian ? "دفترچه پاک شد" : "Log cleared",
+                                        Toast.LENGTH_SHORT).show();
+                                // مثل شیت بایگانی: ببند و دوباره باز کن تا ردیف‌های کهنه نمانند
+                                logSheet.dismiss();
+                                showActivityLogSheet();
+                            });
                         }).start())
                         .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
                         .show(), Color.parseColor("#EF4444")));
@@ -2609,64 +2697,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int MIN_BACKUP_PASSWORD_LENGTH = 10;
 
-    private void showBackupSheet() {
-        BottomSheetDialog sheet = new BottomSheetDialog(this);
-
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 20, 24, 24);
-        root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
-
-        TextView tvTitle = new TextView(this);
-        tvTitle.setText(isPersian ? "بکاپ و بازیابی" : "Backup & Restore");
-        tvTitle.setTextSize(19f);
-        tvTitle.setTypeface(null, Typeface.BOLD);
-        tvTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
-        root.addView(tvTitle);
-
-        MaterialButton btnExport = new MaterialButton(this);
-        btnExport.setText(isPersian ? "ساخت بکاپ (خروجی)" : "Create Backup (Export)");
-        LinearLayout.LayoutParams exportLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        exportLp.topMargin = 16;
-        btnExport.setLayoutParams(exportLp);
-        btnExport.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E4E4E7")));
-        btnExport.setTextColor(Color.parseColor("#09090B"));
-        btnExport.setOnClickListener(v -> {
-            sheet.dismiss();
-            showBackupExportDialog();
-        });
-        root.addView(btnExport);
-
-        MaterialButton btnImport = new MaterialButton(this);
-        btnImport.setText(isPersian ? "بازیابی از بکاپ (ورودی)" : "Restore from Backup (Import)");
-        LinearLayout.LayoutParams importLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        importLp.topMargin = 10;
-        btnImport.setLayoutParams(importLp);
-        btnImport.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
-        btnImport.setTextColor(Color.parseColor("#F4F4F5"));
-        btnImport.setOnClickListener(v -> {
-            sheet.dismiss();
-            openBackupLauncher.launch(new String[]{"*/*"});
-        });
-        root.addView(btnImport);
-
-        TextView tvNote = new TextView(this);
-        tvNote.setText(isPersian
-                ? "بکاپ به‌صورت سر-به-سر رمزنگاری می‌شود (AES-256-GCM). بدون «رمز بکاپ» محتوای فایل غیرقابل‌خواندن است و فراموشی آن، بازیابی را برای همیشه غیرممکن می‌کند."
-                : "Backups are end-to-end encrypted (AES-256-GCM). Without the backup password the file is unreadable, and a forgotten backup password makes recovery permanently impossible.");
-        tvNote.setTextSize(12f);
-        tvNote.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
-        LinearLayout.LayoutParams noteLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        noteLp.topMargin = 16;
-        tvNote.setLayoutParams(noteLp);
-        root.addView(tvNote);
-
-        sheet.setContentView(root);
-        sheet.show();
-    }
 
     private void showBackupExportDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -2742,31 +2772,28 @@ public class MainActivity extends AppCompatActivity {
                     if (!it.isArchived()) items.add(it);
                 }
                 String json = buildBackupJson(items);
-                byte[] fileBytes = BackupManager.encrypt(json, backupPassword);
-                dbHelper.logActivity("BACKUP", null);
-
-                File base = getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getFilesDir();
-                File dir = new File(base, "backups");
-                if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("cannot create backup dir");
+                final byte[] fileBytes = BackupManager.encrypt(json, backupPassword);
                 String ts = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new java.util.Date());
-                File outFile = new File(dir, "OfflinePW-Backup-" + ts + ".opwb");
-                try (OutputStream os = new java.io.FileOutputStream(outFile)) {
-                    os.write(fileBytes);
-                }
-                Uri shareUri = FileProvider.getUriForFile(this, PROVIDER_AUTHORITY, outFile);
-
+                final String fileName = "OfflinePW-Backup-" + ts + ".opwb";
+                pendingBackupBytes = fileBytes;
+                pendingBackupCount = items.size();
                 runOnUiThread(() -> {
-                    if (isFinishing() || isChangingConfigurations()) return;
+                    if (isFinishing() || isChangingConfigurations()) {
+                        pendingBackupBytes = null;
+                        return;
+                    }
                     dialog.dismiss();
-                    Intent share = new Intent(Intent.ACTION_SEND);
-                    share.setType("application/octet-stream");
-                    share.putExtra(Intent.EXTRA_STREAM, shareUri);
-                    share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(Intent.createChooser(share, isPersian ? "اشتراک‌گذاری فایل بکاپ" : "Share backup file"));
-                    Toast.makeText(this, isPersian
-                            ? ("بکاپ " + items.size() + " آیتم ساخته شد")
-                            : ("Backup of " + items.size() + " item(s) created"),
-                            Toast.LENGTH_SHORT).show();
+                    try {
+                        // انتخاب‌گر فایل سیستمی — محلی و بدون شبکه؛ کاربر خودش Downloads را انتخاب می‌کند
+                        saveBackupLauncher.launch(fileName);
+                    } catch (Exception e) {
+                        pendingBackupBytes = null;
+                        busyButton.setEnabled(true);
+                        Toast.makeText(this, isPersian
+                                        ? "انتخاب‌گر ذخیره در این دستگاه در دسترس نیست؛ بکاپ ساخته نشد"
+                                        : "No save picker available on this device; backup aborted",
+                                Toast.LENGTH_LONG).show();
+                    }
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -2774,8 +2801,8 @@ public class MainActivity extends AppCompatActivity {
                     busyButton.setEnabled(true);
                     dialog.dismiss();
                     Toast.makeText(this, isPersian
-                            ? "ساخت بکاپ ناموفق بود؛ دوباره تلاش کنید"
-                            : "Backup failed; please try again",
+                                    ? "ساخت بکاپ ناموفق بود؛ دوباره تلاش کنید"
+                                    : "Backup failed; please try again",
                             Toast.LENGTH_LONG).show();
                 });
             }
@@ -2947,8 +2974,16 @@ public class MainActivity extends AppCompatActivity {
                     dbHelper.insertItem(it, cryptoManager);
                 }
                 dbHelper.logActivity("RESTORE", null);
+                final Uri consumed = pendingImportUri;
                 final int count = items.size();
                 runOnUiThread(() -> {
+                    if (consumed != null) {
+                        try {
+                            getContentResolver().releasePersistableUriPermission(consumed,
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        } catch (Exception ignored) {
+                        }
+                    }
                     if (isFinishing() || isChangingConfigurations()) return;
                     pendingImportUri = null;
                     loadVaultData();

@@ -343,9 +343,11 @@ public class AuthActivity extends AppCompatActivity {
     /** آیتم‌های نمایشیِ ولت فریبنده — روی DEK دوم و فایل DB دوم نوشته می‌شوند. */
     private void seedDecoyVault(SecretKey dek2) {
         try {
+            MainActivity.VaultDatabaseHelper helper = null;
+            try {
             VaultSession.setDek(dek2); // clear() داخلش پرچم را صفر می‌کند؛ بعد از آن setDecoy
             VaultSession.setDecoy(true);
-            MainActivity.VaultDatabaseHelper helper = new MainActivity.VaultDatabaseHelper(this);
+            helper = new MainActivity.VaultDatabaseHelper(this);
             CryptoManager crypto = new CryptoManager();
             long now = System.currentTimeMillis();
             long day = 24L * 3600 * 1000L;
@@ -366,7 +368,12 @@ public class AuthActivity extends AppCompatActivity {
                         UUID.randomUUID().toString(), r[0], r[1], r[2], r[3], r[4],
                         r[5], r[6], false, now - age, now - age), crypto);
             }
-            helper.close();
+            } finally {
+                // اگر insert وسط کار بترکد، connection باز نمی‌ماند
+                if (helper != null) {
+                    try { helper.close(); } catch (Exception ignored) { }
+                }
+            }
         } catch (Throwable ignored) {
             // هیچ خطایی (حتی Error سطح native DB) نباید ساخت ولت اصلی را متوقف کند.
         } finally {

@@ -3,6 +3,7 @@ package com.offlinepw.vault;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -18,7 +19,8 @@ public class TotpGenerator {
      */
     public static String normalizeSecret(String secret) {
         if (secret == null) return null;
-        String cleaned = secret.trim().toUpperCase()
+        // Locale.ROOT: روی سیستم ترکی "İ" نشود و کلید معتبر باطل/خراب نشود
+        String cleaned = secret.trim().toUpperCase(Locale.ROOT)
                 .replace("=", "")
                 .replace(" ", "")
                 .replace("-", "");
