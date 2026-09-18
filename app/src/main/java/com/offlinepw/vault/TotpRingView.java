@@ -58,12 +58,21 @@ public class TotpRingView extends View {
         removeCallbacks(tick);
     }
 
+    /** ضخامت خط با اندازه‌ی ویو مقیاس می‌شود تا حلقه‌ی بزرگ‌تر هم ظریف بماند. */
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        float stroke = Math.max(3f, Math.min(w, h) * 0.12f);
+        trackPaint.setStrokeWidth(stroke);
+        arcPaint.setStrokeWidth(stroke);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        // fraction همیشه از ساعت دیواری — بدون نیاز به بیرونی sync با کد
+        // fraction همیشه از ساعت دیواری — بدون نیاز به sync بیرونی با کد
         fraction = (30000L - (System.currentTimeMillis() % 30000L)) / 30000f;
-        float pad = 5 * getResources().getDisplayMetrics().density;
+        float pad = arcPaint.getStrokeWidth() / 2f + 1.5f * getResources().getDisplayMetrics().density;
         bounds.set(pad, pad, getWidth() - pad, getHeight() - pad);
 
         trackPaint.setColor(Color.parseColor(dark ? "#3F3F46" : "#D4D4D8"));

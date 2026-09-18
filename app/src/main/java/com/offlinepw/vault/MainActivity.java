@@ -585,7 +585,9 @@ public class MainActivity extends AppCompatActivity {
                     0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
             TotpRingView totpRing = new TotpRingView(ctx);
-            totpRow.addView(totpRing, new LinearLayout.LayoutParams(30, 30));
+            totpRow.addView(totpRing, new LinearLayout.LayoutParams(
+                    (int) (36 * ctx.getResources().getDisplayMetrics().density),
+                    (int) (36 * ctx.getResources().getDisplayMetrics().density)));
             root.addView(totpRow);
 
             // راهنمای اسوایپ به بالا (بایگانی) — فقط حین کشیدن عمودی دیده می‌شود
@@ -1494,7 +1496,7 @@ public class MainActivity extends AppCompatActivity {
         btnArchive.setCornerRadius(12);
         btnArchive.setOnClickListener(v -> {
             sheet.dismiss();
-            new AlertDialog.Builder(this)
+            styleNordicDialog(new AlertDialog.Builder(this)
                     .setTitle(isPersian ? "انتقال به بایگانی" : "Move to archive")
                     .setMessage(isPersian
                             ? "«" + item.getTitle() + "» به بایگانی برود؟ تا ۳۰ روز از منوی ⋮ قابل بازگردانی است."
@@ -1515,7 +1517,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }).start())
                     .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
-                    .show();
+                    .show(), Color.parseColor("#F59E0B"));
         });
         actionsRow.addView(btnArchive);
 
@@ -1637,7 +1639,9 @@ public class MainActivity extends AppCompatActivity {
         // حلقه‌ی شمارش معکوس در شیت هم نمایش داده می‌شود
         TotpRingView ring = new TotpRingView(this);
         ring.setState(isDarkMode, (30 - (System.currentTimeMillis() % 30000L) / 1000f) / 30f);
-        valueRow.addView(ring, new LinearLayout.LayoutParams(30, 30));
+        valueRow.addView(ring, new LinearLayout.LayoutParams(
+                (int) (44 * getResources().getDisplayMetrics().density),
+                (int) (44 * getResources().getDisplayMetrics().density)));
 
         box.addView(valueRow);
         return box;
@@ -1776,6 +1780,60 @@ public class MainActivity extends AppCompatActivity {
     // ================= منوی بیشتر (نوردیک): سلامت، ترتیب، بایگانی، دفترچه =================
 
     /** کانتینر مشترک شیت‌های نوردیک: پس‌زمینه surface با گوشه‌ی گرد بالا + بوردر. */
+    /**
+     *Nordic-سازی AlertDialogهای تأییدی — بعد از show() صدا زده شود چون
+     * دکمه‌ها و TextViewها پس از نمایش موجود می‌شوند. accent = رنگ دکمه‌ی مثبت.
+     */
+    private void styleNordicDialog(android.content.DialogInterface raw, int accentColor) {
+        if (!(raw instanceof AlertDialog)) return;
+        AlertDialog d = (AlertDialog) raw;
+        float density = getResources().getDisplayMetrics().density;
+
+        android.view.Window w = d.getWindow();
+        if (w != null) {
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(ContextCompat.getColor(this, R.color.nordic_surface));
+            bg.setCornerRadius(22 * density);
+            bg.setStroke(Math.max(1, (int) (1.2f * density)),
+                    ContextCompat.getColor(this, R.color.nordic_border));
+            w.setBackgroundDrawable(bg);
+        }
+
+        int titleId = getResources().getIdentifier("alertTitle", "id", "android");
+        int msgId = getResources().getIdentifier("message", "id", "android");
+        android.widget.TextView title = titleId != 0 ? d.findViewById(titleId) : null;
+        if (title != null) {
+            title.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+            title.setLetterSpacing(0.03f);
+            title.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+        }
+        android.widget.TextView msg = msgId != 0 ? d.findViewById(msgId) : null;
+        if (msg != null) {
+            msg.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+            msg.setLineSpacing(6 * density, 1f);
+        }
+
+        android.widget.Button positive = d.getButton(android.content.DialogInterface.BUTTON_POSITIVE);
+        if (positive != null) {
+            positive.setTextColor(accentColor);
+            positive.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+            positive.setLetterSpacing(0.06f);
+            positive.setBackground(null);
+        }
+        android.widget.Button negative = d.getButton(android.content.DialogInterface.BUTTON_NEGATIVE);
+        if (negative != null) {
+            negative.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+            negative.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+            negative.setLetterSpacing(0.06f);
+            negative.setBackground(null);
+        }
+        android.widget.Button neutral = d.getButton(android.content.DialogInterface.BUTTON_NEUTRAL);
+        if (neutral != null) {
+            neutral.setTextColor(accentColor);
+            neutral.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+        }
+    }
+
     private BottomSheetDialog showNordicSheet(LinearLayout content) {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
         sheet.setContentView(content);
@@ -1998,7 +2056,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }).start();
                 });
-                btnPurge.setOnClickListener(v -> new AlertDialog.Builder(this)
+                btnPurge.setOnClickListener(v -> styleNordicDialog(new AlertDialog.Builder(this)
                         .setTitle(isPersian ? "حذف قطعی" : "Delete forever")
                         .setMessage(isPersian
                                 ? "«" + tvT.getText() + "» برای همیشه حذف شود؟ این عمل قابل بازگشت نیست."
@@ -2021,7 +2079,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }).start())
                         .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
-                        .show());
+                        .show(), Color.parseColor("#EF4444")));
 
                 actions.addView(btnRestore);
                 actions.addView(btnPurge);
@@ -2123,7 +2181,7 @@ public class MainActivity extends AppCompatActivity {
                 btnClear.setStrokeWidth(2);
                 btnClear.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
                 btnClear.setCornerRadius(12);
-                btnClear.setOnClickListener(v -> new AlertDialog.Builder(this)
+                btnClear.setOnClickListener(v -> styleNordicDialog(new AlertDialog.Builder(this)
                         .setTitle(isPersian ? "پاک کردن دفترچه" : "Clear activity log")
                         .setMessage(isPersian ? "همه‌ی رویدادها حذف شوند؟" : "Delete all recorded events?")
                         .setPositiveButton(isPersian ? "پاک کردن" : "Clear", (d, w) -> new Thread(() -> {
@@ -2136,7 +2194,7 @@ public class MainActivity extends AppCompatActivity {
                                     Toast.LENGTH_SHORT).show());
                         }).start())
                         .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
-                        .show());
+                        .show(), Color.parseColor("#EF4444")));
                 root.addView(btnClear);
             });
         }).start();
@@ -2168,14 +2226,14 @@ public class MainActivity extends AppCompatActivity {
         String[] opts = isPersian
                 ? new String[]{"پیش‌فرض (ترتیب ثبت)", "عنوان (الفبا)", "دسته‌بندی", "آخرین به‌روزرسانی (جدید اول)"}
                 : new String[]{"Default (creation order)", "Title (A-Z)", "Category", "Recently updated first"};
-        new AlertDialog.Builder(this)
+        styleNordicDialog(new AlertDialog.Builder(this)
                 .setTitle(isPersian ? "ترتیب لیست" : "List Order")
                 .setSingleChoiceItems(opts, adapter != null ? adapter.getSortMode() : 0, (d, which) -> {
                     prefs.edit().putInt("vault_sort_mode", which).apply();
                     if (adapter != null) adapter.setSortMode(which);
                     d.dismiss();
                 })
-                .show();
+                .show(), Color.parseColor("#F59E0B"));
     }
 
     private static final long STALE_AFTER_MS = 180L * 24 * 60 * 60 * 1000;
@@ -2245,11 +2303,11 @@ public class MainActivity extends AppCompatActivity {
                                 : "✅ All good — no reuse, no weak passwords, nothing stale.");
         }
 
-        new AlertDialog.Builder(this)
+        styleNordicDialog(new AlertDialog.Builder(this)
                 .setTitle(isPersian ? "گزارش سلامت رمزها" : "Password Health Report")
                 .setMessage(sb.toString())
                 .setPositiveButton(isPersian ? "بستن" : "Close", null)
-                .show();
+                .show(), Color.parseColor("#F59E0B"));
     }
 
     private String healthTitleOf(VaultItem it) {
@@ -2779,14 +2837,14 @@ public class MainActivity extends AppCompatActivity {
                     if (isFinishing() || isChangingConfigurations()) return;
                     dialog.dismiss();
                     busyButton.setEnabled(true);
-                    new AlertDialog.Builder(this)
+                    styleNordicDialog(new AlertDialog.Builder(this)
                             .setTitle(isPersian ? "بازیابی بکاپ" : "Restore Backup")
                             .setMessage(isPersian
                                     ? ("بکاپ " + count + " آیتم دارد.\nآیتم‌هایی که شناسه‌ی یکسان دارند بروزرسانی و بقیه به‌عنوان جدید اضافه می‌شوند.\nادامه می‌دهید؟")
                                     : ("The backup contains " + count + " item(s).\nItems with the same ID will be updated, the rest will be added.\nContinue?"))
                             .setPositiveButton(isPersian ? "بازیابی" : "Restore", (d, w) -> writeImportedItems(items))
                             .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
-                            .show();
+                            .show(), Color.parseColor("#F59E0B"));
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
