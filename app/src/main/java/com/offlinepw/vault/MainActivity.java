@@ -281,6 +281,7 @@ public class MainActivity extends AppCompatActivity {
             SQLiteDatabase db = getWritableDatabase(passphrase);
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_ARCHIVED, archived ? 1 : 0);
+            cv.put(COLUMN_UPDATED_AT, System.currentTimeMillis());
             db.update(TABLE_ITEMS, cv, COLUMN_ID + "=?", new String[]{id});
         }
 
@@ -835,8 +836,8 @@ public class MainActivity extends AppCompatActivity {
                     } catch (Exception ignored) {
                     }
                     runOnUiThread(() -> Toast.makeText(this, MainActivity.this.isPersian
-                                    ? ("بکاپ " + count + " آیتمی ذخیره شد (کاملاً آفلاین)")
-                                    : ("Backup of " + count + " item(s) saved (fully offline)"),
+                                    ? ("بکاپ " + count + " آیتمی ذخیره شد")
+                                    : ("Backup of " + count + " item(s) saved"),
                             Toast.LENGTH_LONG).show());
                 }).start();
             });
@@ -1468,7 +1469,7 @@ public class MainActivity extends AppCompatActivity {
             String title = etTitle.getText() != null ? etTitle.getText().toString().trim() : "";
             String category = etCategory.getText() != null ? etCategory.getText().toString().trim() : "LOGIN";
             String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
-            String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+            String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
             String totp = (etTotpSecret != null && etTotpSecret.getText() != null) ? etTotpSecret.getText().toString().trim() : "";
             String website = (etWebsite != null && etWebsite.getText() != null) ? etWebsite.getText().toString().trim() : "";
             String notes = etNotes.getText() != null ? etNotes.getText().toString().trim() : "";
@@ -2773,7 +2774,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 String json = buildBackupJson(items);
                 final byte[] fileBytes = BackupManager.encrypt(json, backupPassword);
-                String ts = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new java.util.Date());
+                String ts = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new java.util.Date());
                 final String fileName = "OfflinePW-Backup-" + ts + ".opwb";
                 pendingBackupBytes = fileBytes;
                 pendingBackupCount = items.size();
@@ -2915,6 +2916,9 @@ public class MainActivity extends AppCompatActivity {
                 else if ("decoy".equals(bk)) bk = "b";
                 final String backupKind = bk;
                 JSONArray arr = root.getJSONArray("items");
+                if (arr.length() > MAX_BACKUP_ITEMS) {
+                    throw new IllegalStateException("backup contains too many items (max " + MAX_BACKUP_ITEMS + ")");
+                }
                 List<VaultItem> items = new ArrayList<>();
                 for (int i = 0; i < arr.length(); i++) {
                     JSONObject o = arr.getJSONObject(i);
@@ -3001,6 +3005,9 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
+    private static final int MAX_BACKUP_FILE_SIZE = 10 * 1024 * 1024; // حداکثر ۱۰ مگابایت برای فایل بکاپ
+    private static final int MAX_BACKUP_ITEMS = 10000; // سقف تعداد رکوردها در بکاپ
+
     private byte[] readAllBytes(Uri uri) throws Exception {
         if (uri == null) throw new java.io.IOException("no uri");
         try (InputStream is = getContentResolver().openInputStream(uri);
@@ -3008,7 +3015,12 @@ public class MainActivity extends AppCompatActivity {
             if (is == null) throw new java.io.IOException("cannot open file");
             byte[] buf = new byte[8192];
             int n;
+            int total = 0;
             while ((n = is.read(buf)) != -1) {
+                total += n;
+                if (total > MAX_BACKUP_FILE_SIZE) {
+                    throw new IllegalStateException("backup file exceeds 10MB limit");
+                }
                 bos.write(buf, 0, n);
             }
             return bos.toByteArray();

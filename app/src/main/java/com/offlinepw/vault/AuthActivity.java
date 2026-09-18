@@ -320,14 +320,24 @@ public class AuthActivity extends AppCompatActivity {
                         .commit();
 
                 // دیتابیس فریبنده با چند آیتمِ باورپذیرِ بی‌خطر پر می‌شود تا
-                // «خالی بودن» زیر سؤال نبرد؛ خطایش نباید ساخت ولت اصلی را متوقف کند.
-                if (hasDecoy) seedDecoyVault(dek2);
+                // «خالی بودن» زیر سؤال نبرد. اگر ساخت decoy با شکست مواجه شود به کاربر اطلاع داده می‌شود.
+                boolean decoySeeded = true;
+                if (hasDecoy) {
+                    decoySeeded = seedDecoyVault(dek2);
+                }
 
+                final boolean finalDecoySeeded = decoySeeded;
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     VaultSession.setDek(dek);
                     setUnlockButtonBusy(false);
-                    Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
+                    if (hasDecoy && !finalDecoySeeded) {
+                        Toast.makeText(this, isPersian
+                                ? "ولت اصلی ساخته شد، اما ساخت ولت فریبنده با خطا مواجه شد"
+                                : "Primary vault created, but decoy vault creation failed", Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
+                    }
                     proceedToMain();
                 });
             } catch (Exception e) {
@@ -341,7 +351,7 @@ public class AuthActivity extends AppCompatActivity {
     }
 
     /** آیتم‌های نمایشیِ ولت فریبنده — روی DEK دوم و فایل DB دوم نوشته می‌شوند. */
-    private void seedDecoyVault(SecretKey dek2) {
+    private boolean seedDecoyVault(SecretKey dek2) {
         try {
             MainActivity.VaultDatabaseHelper helper = null;
             try {
@@ -368,14 +378,16 @@ public class AuthActivity extends AppCompatActivity {
                         UUID.randomUUID().toString(), r[0], r[1], r[2], r[3], r[4],
                         r[5], r[6], false, now - age, now - age), crypto);
             }
+            return true;
             } finally {
                 // اگر insert وسط کار بترکد، connection باز نمی‌ماند
                 if (helper != null) {
                     try { helper.close(); } catch (Exception ignored) { }
                 }
             }
-        } catch (Throwable ignored) {
-            // هیچ خطایی (حتی Error سطح native DB) نباید ساخت ولت اصلی را متوقف کند.
+        } catch (Throwable t) {
+            // خطای سطح دیتابیس را به فراخواننده برمی‌گردانیم
+            return false;
         } finally {
             VaultSession.setDecoy(false);
         }
@@ -548,14 +560,21 @@ public class AuthActivity extends AppCompatActivity {
             } catch (Exception ignored) {
             }
         }
-        // ۲) حذف هر فایل باقیمانده در پوشهی databases
+        // ۲) حذف فایل‌های دیتابیس شناخته‌شده و جانبی آنها در پوشه‌ی databases
         try {
             dbDir = new File(getApplicationInfo().dataDir, "databases");
             if (dbDir.isDirectory()) {
                 File[] files = dbDir.listFiles();
                 if (files != null) {
                     for (File f : files) {
-                        if (f != null && !f.delete()) wipeOk = false;
+                        if (f != null && f.isFile()) {
+                            String name = f.getName();
+                            if (name.startsWith(DB_NAME)
+                                    || name.startsWith(DECOY_DB_NAME)
+                                    || name.startsWith(MainActivity.VaultDatabaseHelper.LEGACY_DECOY_DB_NAME)) {
+                                if (!f.delete()) wipeOk = false;
+                            }
+                        }
                     }
                 }
             }
