@@ -49,19 +49,18 @@
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent">
 
-                    <!-- منوی بیشتر: گزارش سلامت رمزها + ترتیب لیست -->
+                    <!-- منوی بیشتر: گزارش سلامت، ترتیب، آرشیو، دفترچه فعالیت -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnMore"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="36dp"
                         android:layout_height="36dp"
-                        android:insetTop="0dp"
-                        android:insetBottom="0dp"
                         android:padding="0dp"
-                        app:icon="@drawable/ic_more_vert"
-                        app:iconSize="20dp"
-                        app:iconPadding="0dp"
-                        app:iconTint="@color/nordic_text_primary"
+                        android:text="⋮"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:fontFamily="monospace"
+                        android:textColor="@color/nordic_text_primary"
                         app:backgroundTint="@color/nordic_tonal_btn_bg"
                         app:strokeColor="@color/nordic_border"
                         app:strokeWidth="1dp"
@@ -142,6 +141,115 @@
             android:textSize="13sp"
             android:paddingHorizontal="14dp"
             android:background="@drawable/bg_search_input" />
+
+        <!-- چیپ‌های فیلتر دسته‌بندی — طرح نوردیک -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:clipToPadding="false"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="10dp">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/chipGroupCategory"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipAll"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:minHeight="34dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="همه"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/chip_text"
+                    app:chipBackgroundColor="@color/chip_bg"
+                    app:chipStrokeColor="@color/nordic_border"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipLogin"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:minHeight="34dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="LOGIN"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/chip_text"
+                    app:chipBackgroundColor="@color/chip_bg"
+                    app:chipStrokeColor="@color/nordic_border"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipCard"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:minHeight="34dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="CARD"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/chip_text"
+                    app:chipBackgroundColor="@color/chip_bg"
+                    app:chipStrokeColor="@color/nordic_border"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipWifi"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:minHeight="34dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="WIFI"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/chip_text"
+                    app:chipBackgroundColor="@color/chip_bg"
+                    app:chipStrokeColor="@color/nordic_border"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipNote"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:minHeight="34dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="NOTE"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/chip_text"
+                    app:chipBackgroundColor="@color/chip_bg"
+                    app:chipStrokeColor="@color/nordic_border"
+                    app:chipStrokeWidth="1dp"
+                    app:checkedIconVisible="false" />
+            </com.google.android.material.chip.ChipGroup>
+        </HorizontalScrollView>
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.recyclerview.widget.RecyclerView

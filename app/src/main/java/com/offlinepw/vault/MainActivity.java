@@ -89,14 +89,19 @@ public class MainActivity extends AppCompatActivity {
         private String totpSecret;
         private String website;
         private boolean pinned;
+        private boolean archived;
         private long createdAt;   // epoch millis (0 = نامعلوم/قدیمی)
         private long updatedAt;   // epoch millis (0 = نامعلوم/قدیمی)
 
         public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned) {
-            this(id, title, category, username, password, notes, totpSecret, website, pinned, 0L, 0L);
+            this(id, title, category, username, password, notes, totpSecret, website, pinned, 0L, 0L, false);
         }
 
         public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned, long createdAt, long updatedAt) {
+            this(id, title, category, username, password, notes, totpSecret, website, pinned, createdAt, updatedAt, false);
+        }
+
+        public VaultItem(String id, String title, String category, String username, String password, String notes, String totpSecret, String website, boolean pinned, long createdAt, long updatedAt, boolean archived) {
             this.id = id;
             this.title = title;
             this.category = category;
@@ -108,6 +113,7 @@ public class MainActivity extends AppCompatActivity {
             this.pinned = pinned;
             this.createdAt = createdAt;
             this.updatedAt = updatedAt;
+            this.archived = archived;
         }
 
         public String getId() { return id; }
@@ -120,6 +126,8 @@ public class MainActivity extends AppCompatActivity {
         public String getWebsite() { return website; }
         public boolean isPinned() { return pinned; }
         public void setPinned(boolean pinned) { this.pinned = pinned; }
+        public boolean isArchived() { return archived; }
+        public void setArchived(boolean archived) { this.archived = archived; }
         public long getCreatedAt() { return createdAt; }
         public long getUpdatedAt() { return updatedAt; }
     }
@@ -137,9 +145,22 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_PINNED = "pinned";
         public static final String COLUMN_CREATED_AT = "created_at";
         public static final String COLUMN_UPDATED_AT = "updated_at";
+        public static final String COLUMN_ARCHIVED = "archived";
+        public static final String TABLE_LOG = "activity_log";
 
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 5);
+            super(context, "offline_pw_vault.db", null, 6);
+        }
+
+        private void createLogTable(SQLiteDatabase db) {
+            // دفترچه‌ی فعالیت — فقط شناسه‌ی آیتم ذخیره می‌شود (عنوانِ حساس در لاگ
+            // نیست؛ هنگام نمایش از خود ولت resolve می‌شود). کل جدول داخل DB
+            // رمزنگاری‌شده‌ی SQLCipher است.
+            db.execSQL("CREATE TABLE IF NOT EXISTS " + TABLE_LOG + " (" +
+                    "_id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "ts INTEGER NOT NULL, " +
+                    "kind TEXT NOT NULL, " +
+                    "item_id TEXT)");
         }
 
         private String getPassphrase() {
@@ -161,7 +182,9 @@ public class MainActivity extends AppCompatActivity {
                     COLUMN_WEBSITE + " TEXT, " +
                     COLUMN_PINNED + " INTEGER NOT NULL DEFAULT 0, " +
                     COLUMN_CREATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
-                    COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0)");
+                    COLUMN_UPDATED_AT + " INTEGER NOT NULL DEFAULT 0, " +
+                    COLUMN_ARCHIVED + " INTEGER NOT NULL DEFAULT 0)");
+            createLogTable(db);
         }
 
         @Override
@@ -200,6 +223,12 @@ public class MainActivity extends AppCompatActivity {
                             " WHERE " + COLUMN_UPDATED_AT + "=0");
                 } catch (Exception ignored) {}
             }
+            if (oldVersion < 6) {
+                try {
+                    db.execSQL("ALTER TABLE " + TABLE_ITEMS + " ADD COLUMN " + COLUMN_ARCHIVED + " INTEGER NOT NULL DEFAULT 0");
+                } catch (Exception ignored) {}
+                createLogTable(db);
+            }
         }
 
         public void insertItem(VaultItem item, CryptoManager crypto) {
@@ -219,7 +248,83 @@ public class MainActivity extends AppCompatActivity {
             cv.put(COLUMN_PINNED, item.isPinned() ? 1 : 0);
             cv.put(COLUMN_CREATED_AT, item.getCreatedAt());
             cv.put(COLUMN_UPDATED_AT, item.getUpdatedAt());
+            cv.put(COLUMN_ARCHIVED, item.isArchived() ? 1 : 0);
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+        }
+
+        public void setArchived(String id, boolean archived) {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            SQLiteDatabase db = getWritableDatabase(passphrase);
+            ContentValues cv = new ContentValues();
+            cv.put(COLUMN_ARCHIVED, archived ? 1 : 0);
+            db.update(TABLE_ITEMS, cv, COLUMN_ID + "=?", new String[]{id});
+        }
+
+        /** آرشیوهایی که بیش از ۳۰ روز از آخرین تغییرشان می‌گذرد، قطعی پاک می‌شوند. */
+        public void purgeExpiredArchived() {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
+            try {
+                SQLiteDatabase db = getWritableDatabase(passphrase);
+                db.execSQL("DELETE FROM " + TABLE_ITEMS + " WHERE " + COLUMN_ARCHIVED + "=1 AND " +
+                        "(CASE WHEN " + COLUMN_UPDATED_AT + ">0 THEN " + COLUMN_UPDATED_AT +
+                        " ELSE " + COLUMN_CREATED_AT + " END) < ?", new Object[]{cutoff});
+            } catch (Exception ignored) {
+            }
+        }
+
+        // ---------- دفترچه‌ی فعالیت (audit log) ----------
+        public void logActivity(String kind, String itemId) {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) return;
+            try {
+                SQLiteDatabase db = getWritableDatabase(passphrase);
+                ContentValues cv = new ContentValues();
+                cv.put("ts", System.currentTimeMillis());
+                cv.put("kind", kind);
+                cv.put("item_id", itemId);
+                db.insert(TABLE_LOG, null, cv);
+                db.execSQL("DELETE FROM " + TABLE_LOG + " WHERE _id NOT IN " +
+                        "(SELECT _id FROM " + TABLE_LOG + " ORDER BY _id DESC LIMIT 200)");
+            } catch (Exception ignored) {
+                // لاگ هرگز نباید مسیر اصلی کاربر را بشکند
+            }
+        }
+
+        public static class LogEntry {
+            public final long ts;
+            public final String kind;
+            public final String itemId;
+            public LogEntry(long ts, String kind, String itemId) {
+                this.ts = ts; this.kind = kind; this.itemId = itemId;
+            }
+        }
+
+        public List<LogEntry> getActivityLog() {
+            List<LogEntry> out = new ArrayList<>();
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            SQLiteDatabase db = getReadableDatabase(passphrase);
+            Cursor c = null;
+            try {
+                c = db.query(TABLE_LOG, new String[]{"ts", "kind", "item_id"},
+                        null, null, null, null, "_id DESC", "200");
+                while (c.moveToNext()) {
+                    out.add(new LogEntry(c.getLong(0), c.getString(1), c.getString(2)));
+                }
+            } finally {
+                if (c != null) c.close();
+            }
+            return out;
+        }
+
+        public void clearActivityLog() {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            SQLiteDatabase db = getWritableDatabase(passphrase);
+            db.delete(TABLE_LOG, null, null);
         }
 
         public void setPinned(String id, boolean pinned) {
@@ -269,7 +374,10 @@ public class MainActivity extends AppCompatActivity {
                         if (createdIdx != -1) createdAt = c.getLong(createdIdx);
                         int updatedIdx = c.getColumnIndex(COLUMN_UPDATED_AT);
                         if (updatedIdx != -1) updatedAt = c.getLong(updatedIdx);
-                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website, pinned, createdAt, updatedAt));
+                        boolean archived = false;
+                        int archivedIdx = c.getColumnIndex(COLUMN_ARCHIVED);
+                        if (archivedIdx != -1) archived = c.getInt(archivedIdx) != 0;
+                        list.add(new VaultItem(id, title, cat, user, pass, notes, totp, website, pinned, createdAt, updatedAt, archived));
                     } catch (Exception perRow) {
                         // یک رکورد خراب نباید جلوی خواندن بقیه‌ی رکوردها را بگیرد؛
                         // فقط با پرچم خطا ادامه می‌دهیم تا UI اطلاع‌رسانی کند.
@@ -303,6 +411,12 @@ public class MainActivity extends AppCompatActivity {
         private String lastQuery = "";
         /** 0=پیش‌فرض (ترتیب ثبت)، 1=عنوان، 2=دسته‌بندی، 3=آخرین به‌روزرسانی */
         private int sortMode = 0;
+        private String categoryFilter; // null = همه؛ وگرنه LOGIN/CARD/WIFI/NOTE
+
+        public void setCategoryFilter(String category) {
+            this.categoryFilter = category;
+            applyFilterAndSort();
+        }
 
         public VaultAdapter(OnItemClickListener listener) {
             this.listener = listener;
@@ -348,6 +462,16 @@ public class MainActivity extends AppCompatActivity {
                         out.add(it);
                     }
                 }
+            }
+            if (categoryFilter != null) {
+                // دسته‌بندی خالی در ولت همان LOGIN پیش‌فرض است
+                List<VaultItem> byCat = new ArrayList<>();
+                for (VaultItem it : out) {
+                    String cat = it.getCategory() == null || it.getCategory().trim().isEmpty()
+                            ? "LOGIN" : it.getCategory().trim().toUpperCase(Locale.ROOT);
+                    if (cat.equals(categoryFilter)) byCat.add(it);
+                }
+                out = byCat;
             }
             sortDisplayList(out);
             displayList = out;
@@ -446,13 +570,34 @@ public class MainActivity extends AppCompatActivity {
             tvMasked.setPadding(0, 6, 0, 0);
             root.addView(tvMasked);
 
+            // ردیف TOTP: کد + حلقه‌ی شمارش معکوسِ نوردیک
+            LinearLayout totpRow = new LinearLayout(ctx);
+            totpRow.setOrientation(LinearLayout.HORIZONTAL);
+            totpRow.setGravity(Gravity.CENTER_VERTICAL);
+            totpRow.setPadding(0, 10, 0, 0);
+            totpRow.setVisibility(View.GONE);
+
             TextView tvTotpDisplay = new TextView(ctx);
             tvTotpDisplay.setTextSize(13f);
             tvTotpDisplay.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
             tvTotpDisplay.setTextColor(Color.parseColor("#F59E0B"));
-            tvTotpDisplay.setPadding(0, 8, 0, 0);
-            tvTotpDisplay.setVisibility(View.GONE);
-            root.addView(tvTotpDisplay);
+            totpRow.addView(tvTotpDisplay, new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TotpRingView totpRing = new TotpRingView(ctx);
+            totpRow.addView(totpRing, new LinearLayout.LayoutParams(30, 30));
+            root.addView(totpRow);
+
+            // راهنمای اسوایپ به بالا (بایگانی) — فقط حین کشیدن عمودی دیده می‌شود
+            TextView tvSwipeHint = new TextView(ctx);
+            tvSwipeHint.setText(isPersian ? "↑ رها کن تا به بایگانی برود (تا ۳۰ روز قابل بازگردانی)"
+                                          : "↑ release to archive (restorable for 30 days)");
+            tvSwipeHint.setTextSize(10.5f);
+            tvSwipeHint.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            tvSwipeHint.setTextColor(Color.parseColor("#F59E0B"));
+            tvSwipeHint.setPadding(0, 8, 0, 0);
+            tvSwipeHint.setVisibility(View.GONE);
+            root.addView(tvSwipeHint);
 
             // خط «آخرین به‌روزرسانی» — پایین کارت، فقط وقتی تاریخ معلوم باشد
             TextView tvUpdated = new TextView(ctx);
@@ -463,7 +608,7 @@ public class MainActivity extends AppCompatActivity {
             root.addView(tvUpdated);
 
             card.addView(root);
-            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated);
+            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, totpRow, totpRing, tvSwipeHint);
         }
 
         @Override
@@ -486,18 +631,18 @@ public class MainActivity extends AppCompatActivity {
             holder.tvUsername.setText(item.getUsername());
 
             if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
-                holder.tvTotpDisplay.setVisibility(View.VISIBLE);
+                holder.totpRow.setVisibility(View.VISIBLE);
                 boolean isRevealed = revealedTotpItemIds.contains(item.getId());
-                long remainingSecs = 30 - ((System.currentTimeMillis() / 1000) % 30);
-                if (isRevealed) {
-                    String code = TotpGenerator.generateCode(item.getTotpSecret());
-                    holder.tvTotpDisplay.setText((isPersian ? "کد ۲مرحله‌ای: " : "TOTP: ") + code + " (" + remainingSecs + "s)");
-                } else {
-                    holder.tvTotpDisplay.setText((isPersian ? "کد ۲مرحله‌ای: ••••••" : "TOTP: ••••••") + " (" + remainingSecs + "s)");
-                }
-                holder.tvTotpDisplay.setOnClickListener(v -> {
+                long nowSecs = System.currentTimeMillis() / 1000;
+                long remainingSecs = 30 - (nowSecs % 30);
+                float ringFraction = (30 - (System.currentTimeMillis() % 30000L)) / 30000f;
+                holder.totpRing.setState(isDarkMode, ringFraction);
+                String code = TotpGenerator.generateCode(item.getTotpSecret());
+                holder.tvTotpDisplay.setText(isRevealed ? code : (isPersian ? "کد ۲مرحله‌ای: ••••••" : "TOTP: ••••••"));
+                holder.totpRow.setOnClickListener(v -> {
                     String currentCode = TotpGenerator.generateCode(item.getTotpSecret());
                     copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentCode);
+                    logActivity("COPY_TOTP", item.getId());
                     revealedTotpItemIds.add(item.getId());
                     // اگر در لحظه‌ی کلیک لیست تغییر کرده باشد (فیلتر/ریلود)،
                     // پوزیشن -1 می‌شود و notifyItemChanged(-1) کرش می‌دهد.
@@ -509,7 +654,7 @@ public class MainActivity extends AppCompatActivity {
                     }, 5000L);
                 });
             } else {
-                holder.tvTotpDisplay.setVisibility(View.GONE);
+                holder.totpRow.setVisibility(View.GONE);
             }
 
             holder.card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
@@ -536,9 +681,13 @@ public class MainActivity extends AppCompatActivity {
         public class ViewHolder extends RecyclerView.ViewHolder {
             MaterialCardView card;
             ImageView ivPin;
-            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated;
+            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, tvSwipeHint;
+            LinearLayout totpRow;
+            TotpRingView totpRing;
 
-            public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u, TextView m, TextView totp, TextView updated) {
+            public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u,
+                              TextView m, TextView totp, TextView updated, LinearLayout row,
+                              TotpRingView ring, TextView swipeHint) {
                 super(itemView);
                 card = (MaterialCardView) itemView;
                 ivPin = pin;
@@ -548,6 +697,9 @@ public class MainActivity extends AppCompatActivity {
                 tvMasked = m;
                 tvTotpDisplay = totp;
                 tvUpdated = updated;
+                totpRow = row;
+                totpRing = ring;
+                tvSwipeHint = swipeHint;
             }
         }
 
@@ -574,9 +726,14 @@ public class MainActivity extends AppCompatActivity {
     // --- اسوایپ پین/آن‌پین ---
     private final Paint swipePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Drawable swipeIconPin;   // lazy-load با tint سفید
-    private Drawable swipeIconUnpin;
+    private Drawable swipeIconArchive;
     private static final int SWIPE_PIN_COLOR = 0xFFF59E0B;    // کهربایی: پین (اسوایپ به چپ)
     private static final int SWIPE_UNPIN_COLOR = 0xFFEF4444;  // قرمز: آن‌پین (اسوایپ به راست)
+    private static final int SWIPE_ARCHIVE_COLOR = 0xFF3F3F46; // خنثی: بایگانی (اسوایپ به بالا)
+
+    // --- آرشیو و دفترچه فعالیت ---
+    private List<VaultItem> archivedItems = new ArrayList<>();
+    private com.google.android.material.chip.ChipGroup chipGroup;
 
     // --- بکاپ/بازیابی ---
     private static final String PROVIDER_AUTHORITY = "com.offlinepw.vault.fileprovider";
@@ -654,6 +811,22 @@ public class MainActivity extends AppCompatActivity {
 
         adapter = new VaultAdapter(item -> showEditOrDeleteDialog(item));
         adapter.setSortMode(prefs.getInt("vault_sort_mode", 0));
+
+        // چیپ‌های فیلتر دسته‌بندی
+        chipGroup = findViewById(R.id.chipGroupCategory);
+        if (chipGroup != null) {
+            applyChipSelection(prefs.getInt("vault_cat_filter", 0), false);
+            chipGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
+                int checked = checkedIds.isEmpty() ? -1 : checkedIds.get(0);
+                int idx = 0;
+                if (checked == R.id.chipLogin) idx = 1;
+                else if (checked == R.id.chipCard) idx = 2;
+                else if (checked == R.id.chipWifi) idx = 3;
+                else if (checked == R.id.chipNote) idx = 4;
+                prefs.edit().putInt("vault_cat_filter", idx).apply();
+                applyChipSelection(idx, false);
+            });
+        }
         if (rvVault != null) {
             rvVault.setLayoutManager(new LinearLayoutManager(this));
             rvVault.setAdapter(adapter);
@@ -667,15 +840,48 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 @Override
+                public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder vh) {
+                    // افقی = پین/آن‌پین؛ عمودی رو به بالا = بایگانی (جایگزین حذف آنی)
+                    return makeMovementFlags(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT | ItemTouchHelper.UP);
+                }
+
+                @Override
                 public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                    handlePinSwipe(viewHolder, direction);
+                    if (direction == ItemTouchHelper.UP) handleArchiveSwipe(viewHolder);
+                    else handlePinSwipe(viewHolder, direction);
+                }
+
+                @Override
+                public void onSelectedChanged(@androidx.annotation.Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
+                    super.onSelectedChanged(viewHolder, actionState);
+                    if (actionState != ItemTouchHelper.ACTION_STATE_SWIPE && viewHolder instanceof VaultAdapter.ViewHolder) {
+                        ((VaultAdapter.ViewHolder) viewHolder).tvSwipeHint.setVisibility(View.GONE);
+                    }
+                }
+
+                @Override
+                public void clearView(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+                    super.clearView(recyclerView, viewHolder);
+                    if (viewHolder instanceof VaultAdapter.ViewHolder) {
+                        ((VaultAdapter.ViewHolder) viewHolder).tvSwipeHint.setVisibility(View.GONE);
+                    }
                 }
 
                 @Override
                 public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv,
                                         @NonNull RecyclerView.ViewHolder holder,
                                         float dX, float dY, int actionState, boolean isCurrentlyActive) {
-                    drawSwipeBackground(c, holder, dX, actionState);
+                    if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && Math.abs(dY) > Math.abs(dX)) {
+                        // کشیدن رو به بالا: رونمایه بایگانی + راهنمای داخل ردیف
+                        if (holder instanceof VaultAdapter.ViewHolder) {
+                            TextView hint = ((VaultAdapter.ViewHolder) holder).tvSwipeHint;
+                            int want = (dY < -10f) ? View.VISIBLE : View.GONE;
+                            if (hint.getVisibility() != want) hint.setVisibility(want);
+                        }
+                        drawArchiveOverlay(c, holder, dY);
+                    } else {
+                        drawSwipeBackground(c, holder, dX, actionState);
+                    }
                     super.onChildDraw(c, rv, holder, dX, dY, actionState, isCurrentlyActive);
                 }
             });
@@ -805,6 +1011,7 @@ public class MainActivity extends AppCompatActivity {
         if (isFinishing() || isChangingConfigurations()) return;
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
+        archivedItems = new ArrayList<>();
         try {
             dbHelper.close(); // کانکشن SQLCipher استخری را ببند تا اثری از فایل در حافظه نماند
         } catch (Exception ignored) {
@@ -818,6 +1025,10 @@ public class MainActivity extends AppCompatActivity {
     private void updateLanguageUI() {
         if (btnLanguage != null) {
             btnLanguage.setText(isPersian ? "FA" : "EN");
+        }
+        if (chipGroup != null) {
+            com.google.android.material.chip.Chip chipAll = chipGroup.findViewById(R.id.chipAll);
+            if (chipAll != null) chipAll.setText(isPersian ? "همه" : "ALL");
         }
         if (etSearch != null) {
             etSearch.setHint(isPersian ? "جستجو در عنوان، حساب و تگ‌ها..." : "Search titles, accounts, tags...");
@@ -869,15 +1080,22 @@ public class MainActivity extends AppCompatActivity {
     private void loadVaultData() {
         new Thread(() -> {
             try {
+                dbHelper.purgeExpiredArchived(); // آرشیوِ کهنه‌تر از ۳۰ روز، قطعی پاک می‌شود
                 AtomicBoolean corruptionFlag = new AtomicBoolean(false);
-                List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager, corruptionFlag);
+                List<VaultItem> all = dbHelper.getAllDecryptedItems(cryptoManager, corruptionFlag);
+                final List<VaultItem> active = new ArrayList<>();
+                final List<VaultItem> archived = new ArrayList<>();
+                for (VaultItem it : all) {
+                    if (it.isArchived()) archived.add(it); else active.add(it);
+                }
                 final boolean hadBrokenRows = corruptionFlag.get();
                 runOnUiThread(() -> {
-                    if (adapter != null) adapter.setItems(items);
+                    archivedItems = archived;
+                    if (adapter != null) adapter.setItems(active);
                     // فرم ویرایشی که هنگام چرخش صفحه باز بوده را بعد از آماده‌شدن لیست باز می‌کنیم.
                     if (pendingDlgRestore != null) {
                         VaultItem target = null;
-                        for (VaultItem it : items) {
+                        for (VaultItem it : active) {
                             if (it.getId().equals(pendingDlgEditId)) {
                                 target = it;
                                 break;
@@ -1135,6 +1353,7 @@ public class MainActivity extends AppCompatActivity {
             new Thread(() -> {
                 try {
                     dbHelper.insertItem(item, cryptoManager);
+                    dbHelper.logActivity(existingItem == null ? "ADD" : "EDIT", id);
                     runOnUiThread(() -> {
                         if (isFinishing()) return;
                         dialog.dismiss();
@@ -1156,48 +1375,80 @@ public class MainActivity extends AppCompatActivity {
         dialog.show();
     }
 
+    /**
+     * شیت جزئیات آیتم — طرح نوردیک: کادر سطح (surface) با گوشه گرد، فیلدها داخل
+     * باکس‌های بورردار، تایپ‌فیس مونواسپیس و رنگ‌های معنایی (سازگار با هر دو تم).
+     * دکمه‌ی «حذف» با «بایگانی» عوض شده: آیتم تا ۳۰ روز در بایگانی قابل بازگشت است.
+     */
     private void showEditOrDeleteDialog(VaultItem item) {
+        logActivity("VIEW", item.getId());
         BottomSheetDialog sheet = new BottomSheetDialog(this);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(48, 40, 48, 48);
-        root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
+        LinearLayout root = nordicSheetRoot();
+        root.setPadding(40, 32, 40, 48);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(0, 0, 0, 20);
 
         TextView tvHeaderTitle = new TextView(this);
         tvHeaderTitle.setText(item.getTitle());
         tvHeaderTitle.setTextSize(19f);
-        tvHeaderTitle.setTypeface(null, Typeface.BOLD);
-        tvHeaderTitle.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
-        LinearLayout.LayoutParams headerTitleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        header.addView(tvHeaderTitle, headerTitleLp);
+        tvHeaderTitle.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvHeaderTitle.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+        header.addView(tvHeaderTitle, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (item.isPinned()) {
+            TextView tvPinBadge = new TextView(this);
+            tvPinBadge.setText("📌");
+            tvPinBadge.setTextSize(15f);
+            tvPinBadge.setPadding(0, 0, 12, 0);
+            header.addView(tvPinBadge);
+        }
 
         TextView tvCategoryBadge = new TextView(this);
-        String cat = item.getCategory() != null && !item.getCategory().isEmpty() ? item.getCategory().toUpperCase() : "LOGIN";
+        String cat = item.getCategory() != null && !item.getCategory().isEmpty()
+                ? item.getCategory().toUpperCase(Locale.ROOT) : "LOGIN";
         tvCategoryBadge.setText(cat);
-        tvCategoryBadge.setTextSize(11f);
-        tvCategoryBadge.setTypeface(null, Typeface.BOLD);
-        tvCategoryBadge.setTextColor(Color.parseColor("#3B82F6"));
-        tvCategoryBadge.setBackgroundColor(Color.parseColor(isDarkMode ? "#1E293B" : "#EFF6FF"));
-        tvCategoryBadge.setPadding(20, 8, 20, 8);
+        tvCategoryBadge.setTextSize(10.5f);
+        tvCategoryBadge.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvCategoryBadge.setTextColor(Color.parseColor("#F59E0B"));
+        android.graphics.drawable.GradientDrawable badgeBg = new android.graphics.drawable.GradientDrawable();
+        badgeBg.setColor(Color.parseColor("#22F59E0B"));
+        badgeBg.setCornerRadius(8 * getResources().getDisplayMetrics().density);
+        badgeBg.setStroke((int) (1 * getResources().getDisplayMetrics().density), Color.parseColor("#44F59E0B"));
+        tvCategoryBadge.setBackground(badgeBg);
+        tvCategoryBadge.setPadding(18, 8, 18, 8);
         header.addView(tvCategoryBadge);
         root.addView(header);
 
+        long ref = item.getUpdatedAt() > 0 ? item.getUpdatedAt() : item.getCreatedAt();
+        if (ref > 0) {
+            TextView tvUpdatedLine = new TextView(this);
+            tvUpdatedLine.setText((isPersian ? "آخرین به‌روزرسانی: " : "last updated: ") + formatVaultDate(ref));
+            tvUpdatedLine.setTextSize(11f);
+            tvUpdatedLine.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+            tvUpdatedLine.setPadding(0, 10, 0, 0);
+            root.addView(tvUpdatedLine);
+        }
+
         View divider = new View(this);
-        divider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2));
-        divider.setBackgroundColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        dividerLp.topMargin = 18;
+        dividerLp.bottomMargin = 6;
+        divider.setLayoutParams(dividerLp);
+        divider.setBackgroundColor(ContextCompat.getColor(this, R.color.nordic_border));
         root.addView(divider);
 
         if (item.getUsername() != null && !item.getUsername().isEmpty()) {
-            root.addView(buildFieldRow(isPersian ? "نام کاربری / شماره" : "Username / Card", item.getUsername(), false));
+            root.addView(buildFieldRow(isPersian ? "نام کاربری / شماره" : "Username / Card",
+                    item.getUsername(), false, item, "COPY_USERNAME"));
         }
         if (item.getPassword() != null && !item.getPassword().isEmpty()) {
-            root.addView(buildFieldRow(isPersian ? "رمز عبور" : "Password", item.getPassword(), true));
+            root.addView(buildFieldRow(isPersian ? "رمز عبور" : "Password",
+                    item.getPassword(), true, item, "COPY_PASSWORD"));
         }
         if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
             root.addView(buildTotpFieldRow(item));
@@ -1206,71 +1457,93 @@ public class MainActivity extends AppCompatActivity {
             root.addView(buildWebsiteFieldRow(item));
         }
         if (item.getNotes() != null && !item.getNotes().isEmpty()) {
-            root.addView(buildFieldRow(isPersian ? "یادداشت" : "Notes", item.getNotes(), false));
+            root.addView(buildFieldRow(isPersian ? "یادداشت" : "Notes",
+                    item.getNotes(), false, item, "COPY_NOTES"));
         }
 
         LinearLayout actionsRow = new LinearLayout(this);
         actionsRow.setOrientation(LinearLayout.HORIZONTAL);
-        actionsRow.setPadding(0, 32, 0, 0);
+        LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        actLp.topMargin = 22;
+        actionsRow.setLayoutParams(actLp);
 
         MaterialButton btnEdit = new MaterialButton(this);
         btnEdit.setText(isPersian ? "ویرایش" : "Edit");
+        btnEdit.setTextSize(12.5f);
+        btnEdit.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         editLp.setMarginEnd(12);
         btnEdit.setLayoutParams(editLp);
-        btnEdit.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
-        btnEdit.setTextColor(Color.parseColor("#F4F4F5"));
+        btnEdit.setBackgroundTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(this, R.color.nordic_primary_btn_bg)));
+        btnEdit.setTextColor(ContextCompat.getColor(this, R.color.nordic_primary_btn_text));
+        btnEdit.setCornerRadius(12);
         btnEdit.setOnClickListener(v -> { sheet.dismiss(); showAddDialog(item); });
         actionsRow.addView(btnEdit);
 
-        MaterialButton btnDelete = new MaterialButton(this);
-        btnDelete.setText(isPersian ? "حذف" : "Delete");
-        LinearLayout.LayoutParams deleteLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        btnDelete.setLayoutParams(deleteLp);
-        btnDelete.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#7F1D1D")));
-        btnDelete.setTextColor(Color.parseColor("#FEE2E2"));
-        btnDelete.setOnClickListener(v -> {
+        MaterialButton btnArchive = new MaterialButton(this);
+        btnArchive.setText(isPersian ? "🗃 بایگانی" : "Archive");
+        btnArchive.setTextSize(12.5f);
+        btnArchive.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        btnArchive.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnArchive.setBackgroundColor(Color.TRANSPARENT);
+        btnArchive.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#F59E0B")));
+        btnArchive.setStrokeWidth(2);
+        btnArchive.setTextColor(Color.parseColor("#F59E0B"));
+        btnArchive.setCornerRadius(12);
+        btnArchive.setOnClickListener(v -> {
             sheet.dismiss();
-            new androidx.appcompat.app.AlertDialog.Builder(this)
-                    .setTitle(isPersian ? "حذف رکورد" : "Delete Item")
+            new AlertDialog.Builder(this)
+                    .setTitle(isPersian ? "انتقال به بایگانی" : "Move to archive")
                     .setMessage(isPersian
-                            ? "«" + item.getTitle() + "» برای همیشه حذف شود؟ این عمل قابل بازگشت نیست."
-                            : "Delete \"" + item.getTitle() + "\" permanently? This cannot be undone.")
-                    .setPositiveButton(isPersian ? "حذف" : "Delete", (d, w) -> {
-                        new Thread(() -> {
-                            try {
-                                dbHelper.deleteItem(item.getId());
-                                runOnUiThread(() -> {
-                                    loadVaultData();
-                                    Toast.makeText(this, isPersian ? "رکورد حذف شد" : "Item deleted", Toast.LENGTH_SHORT).show();
-                                });
-                            } catch (Exception e) {
-                                runOnUiThread(() -> Toast.makeText(this,
-                                        isPersian ? "خطا در حذف؛ دوباره تلاش کنید" : "Delete failed; try again",
-                                        Toast.LENGTH_SHORT).show());
-                            }
-                        }).start();
-                    })
+                            ? "«" + item.getTitle() + "» به بایگانی برود؟ تا ۳۰ روز از منوی ⋮ قابل بازگردانی است."
+                            : "Archive \"" + item.getTitle() + "\"? It stays restorable from the ⋮ menu for 30 days.")
+                    .setPositiveButton(isPersian ? "بایگانی" : "Archive", (d, w) -> new Thread(() -> {
+                        try {
+                            dbHelper.setArchived(item.getId(), true);
+                            dbHelper.logActivity("ARCHIVE", item.getId());
+                            runOnUiThread(() -> {
+                                loadVaultData();
+                                Toast.makeText(this, isPersian ? "به بایگانی رفت" : "Moved to archive",
+                                        Toast.LENGTH_SHORT).show();
+                            });
+                        } catch (Exception e) {
+                            runOnUiThread(() -> Toast.makeText(this,
+                                    isPersian ? "بایگانی ناموفق بود؛ دوباره تلاش کنید" : "Archive failed; try again",
+                                    Toast.LENGTH_SHORT).show());
+                        }
+                    }).start())
                     .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
                     .show();
         });
-        actionsRow.addView(btnDelete);
+        actionsRow.addView(btnArchive);
 
         root.addView(actionsRow);
         sheet.setContentView(root);
+        styleNordicSheet(sheet);
         sheet.show();
     }
 
-    private LinearLayout buildFieldRow(String label, String value, boolean sensitive) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, 24, 0, 0);
+    /** ردیف فیلدِ نوردیک: باکس بوردردار با برچسب مونو + مقدار + کپی (و چشم برای حساس). */
+    private LinearLayout buildFieldRow(String label, String value, boolean sensitive,
+                                       VaultItem item, String copyKind) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundResource(R.drawable.bg_nordic_field);
+        box.setPadding(28, 18, 16, 18);
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.topMargin = 14;
+        box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
         tvLabel.setText(label);
-        tvLabel.setTextSize(12f);
-        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
-        row.addView(tvLabel);
+        tvLabel.setTextSize(10.5f);
+        tvLabel.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvLabel.setLetterSpacing(0.1f);
+        tvLabel.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        box.addView(tvLabel);
 
         LinearLayout valueRow = new LinearLayout(this);
         valueRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1280,7 +1553,7 @@ public class MainActivity extends AppCompatActivity {
         TextView tvValue = new TextView(this);
         tvValue.setTextSize(15f);
         tvValue.setTypeface(sensitive ? Typeface.MONOSPACE : Typeface.DEFAULT);
-        tvValue.setTextColor(Color.parseColor(isDarkMode ? "#F4F4F5" : "#09090B"));
+        tvValue.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
         final boolean[] revealed = {!sensitive};
         Runnable updateText = () -> tvValue.setText(revealed[0] ? value : "••••••••••••");
         updateText.run();
@@ -1288,14 +1561,14 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         valueRow.addView(tvValue, valueLp);
 
-        int iconColor = Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A");
+        int iconColor = ContextCompat.getColor(this, R.color.nordic_text_secondary);
 
         if (sensitive) {
             ImageView ivEye = new ImageView(this);
             ivEye.setImageResource(R.drawable.ic_visibility_off);
             ivEye.setColorFilter(iconColor);
-            LinearLayout.LayoutParams eyeLp = new LinearLayout.LayoutParams(56, 56);
-            eyeLp.setMarginStart(16);
+            LinearLayout.LayoutParams eyeLp = new LinearLayout.LayoutParams(52, 52);
+            eyeLp.setMarginStart(12);
             ivEye.setLayoutParams(eyeLp);
             ivEye.setOnClickListener(v -> {
                 revealed[0] = !revealed[0];
@@ -1308,26 +1581,36 @@ public class MainActivity extends AppCompatActivity {
         ImageView ivCopy = new ImageView(this);
         ivCopy.setImageResource(R.drawable.ic_content_copy);
         ivCopy.setColorFilter(iconColor);
-        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(56, 56);
-        copyLp.setMarginStart(16);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(52, 52);
+        copyLp.setMarginStart(12);
         ivCopy.setLayoutParams(copyLp);
-        ivCopy.setOnClickListener(v -> copyToClipboard(label, value));
+        ivCopy.setOnClickListener(v -> {
+            copyToClipboard(label, value);
+            logActivity(copyKind, item.getId());
+        });
         valueRow.addView(ivCopy);
 
-        row.addView(valueRow);
-        return row;
+        box.addView(valueRow);
+        return box;
     }
 
     private LinearLayout buildTotpFieldRow(VaultItem item) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, 24, 0, 0);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundResource(R.drawable.bg_nordic_field);
+        box.setPadding(28, 18, 16, 18);
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.topMargin = 14;
+        box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
         tvLabel.setText(isPersian ? "کد یکبارمصرف (TOTP)" : "2FA Code (TOTP)");
-        tvLabel.setTextSize(12f);
-        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
-        row.addView(tvLabel);
+        tvLabel.setTextSize(10.5f);
+        tvLabel.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvLabel.setLetterSpacing(0.1f);
+        tvLabel.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        box.addView(tvLabel);
 
         LinearLayout valueRow = new LinearLayout(this);
         valueRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1335,35 +1618,50 @@ public class MainActivity extends AppCompatActivity {
         valueRow.setPadding(0, 6, 0, 0);
 
         TextView tvValue = new TextView(this);
-        tvValue.setTextSize(16f);
+        tvValue.setTextSize(17f);
         tvValue.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         tvValue.setTextColor(Color.parseColor("#F59E0B"));
-        tvValue.setText("••••••");
+        tvValue.setLetterSpacing(0.15f);
+        tvValue.setText("••• •••");
         tvValue.setOnClickListener(v -> {
             String code = TotpGenerator.generateCode(item.getTotpSecret());
-            tvValue.setText(code);
+            tvValue.setText(code.substring(0, 3) + " " + code.substring(3));
             copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", code);
-            tvValue.postDelayed(() -> tvValue.setText("••••••"), 5000);
+            logActivity("COPY_TOTP", item.getId());
+            tvValue.postDelayed(() -> tvValue.setText("••• •••"), 5000);
         });
 
         LinearLayout.LayoutParams valueLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         valueRow.addView(tvValue, valueLp);
-        row.addView(valueRow);
-        return row;
+
+        // حلقه‌ی شمارش معکوس در شیت هم نمایش داده می‌شود
+        TotpRingView ring = new TotpRingView(this);
+        ring.setState(isDarkMode, (30 - (System.currentTimeMillis() % 30000L) / 1000f) / 30f);
+        valueRow.addView(ring, new LinearLayout.LayoutParams(30, 30));
+
+        box.addView(valueRow);
+        return box;
     }
 
     private LinearLayout buildWebsiteFieldRow(VaultItem item) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, 24, 0, 0);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setBackgroundResource(R.drawable.bg_nordic_field);
+        box.setPadding(28, 18, 16, 18);
+        LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        boxLp.topMargin = 14;
+        box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
         tvLabel.setText(isPersian ? "وبسایت" : "Website");
-        tvLabel.setTextSize(12f);
-        tvLabel.setTextColor(Color.parseColor(isDarkMode ? "#71717A" : "#A1A1AA"));
-        row.addView(tvLabel);
+        tvLabel.setTextSize(10.5f);
+        tvLabel.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvLabel.setLetterSpacing(0.1f);
+        tvLabel.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        box.addView(tvLabel);
 
-        int iconColor = Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A");
+        int iconColor = ContextCompat.getColor(this, R.color.nordic_text_secondary);
         String[] lines = item.getWebsite().split("\\r?\\n");
 
         for (String rawLine : lines) {
@@ -1378,13 +1676,14 @@ public class MainActivity extends AppCompatActivity {
             ImageView ivGlobe = new ImageView(this);
             ivGlobe.setImageResource(R.drawable.ic_public);
             ivGlobe.setColorFilter(Color.parseColor("#3B82F6"));
-            LinearLayout.LayoutParams globeLp = new LinearLayout.LayoutParams(44, 44);
+            LinearLayout.LayoutParams globeLp = new LinearLayout.LayoutParams(40, 40);
             globeLp.setMarginEnd(12);
             ivGlobe.setLayoutParams(globeLp);
             valueRow.addView(ivGlobe);
 
             TextView tvValue = new TextView(this);
-            tvValue.setTextSize(14f);
+            tvValue.setTextSize(13.5f);
+            tvValue.setTypeface(Typeface.MONOSPACE);
             tvValue.setTextColor(Color.parseColor("#3B82F6"));
             tvValue.setText(url);
             tvValue.setSingleLine(true);
@@ -1397,15 +1696,18 @@ public class MainActivity extends AppCompatActivity {
             ivCopy.setImageResource(R.drawable.ic_content_copy);
             ivCopy.setColorFilter(iconColor);
             LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(44, 44);
-            copyLp.setMarginStart(16);
+            copyLp.setMarginStart(12);
             ivCopy.setLayoutParams(copyLp);
-            ivCopy.setOnClickListener(v -> copyToClipboard(isPersian ? "وبسایت" : "Website", url));
+            ivCopy.setOnClickListener(v -> {
+                copyToClipboard(isPersian ? "وبسایت" : "Website", url);
+                logActivity("COPY_WEBSITE", item.getId());
+            });
             valueRow.addView(ivCopy);
 
-            row.addView(valueRow);
+            box.addView(valueRow);
         }
 
-        return row;
+        return box;
     }
 
     private void copyToClipboard(String label, String text) {
@@ -1471,19 +1773,395 @@ public class MainActivity extends AppCompatActivity {
         lastCopiedText = null;
     }
 
-    // ================= منوی بیشتر: ترتیب لیست + گزارش سلامت رمزها =================
+    // ================= منوی بیشتر (نوردیک): سلامت، ترتیب، بایگانی، دفترچه =================
+
+    /** کانتینر مشترک شیت‌های نوردیک: پس‌زمینه surface با گوشه‌ی گرد بالا + بوردر. */
+    private BottomSheetDialog showNordicSheet(LinearLayout content) {
+        BottomSheetDialog sheet = new BottomSheetDialog(this);
+        sheet.setContentView(content);
+        styleNordicSheet(sheet);
+        sheet.show();
+        return sheet;
+    }
+
+    private LinearLayout nordicSheetRoot() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 36, 40, 56);
+        return root;
+    }
+
+    private TextView nordicSheetTitle(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextSize(18f);
+        tv.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tv.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+        tv.setLetterSpacing(0.04f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = 24;
+        tv.setLayoutParams(lp);
+        return tv;
+    }
+
+    private View nordicMenuRow(String label, String sub, View.OnClickListener onTap) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setBackgroundResource(android.R.drawable.list_selector_background);
+        row.setPadding(24, 30, 24, 30);
+
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView tvLabel = new TextView(this);
+        tvLabel.setText(label);
+        tvLabel.setTextSize(14.5f);
+        tvLabel.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        tvLabel.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+        texts.addView(tvLabel);
+        if (sub != null && !sub.isEmpty()) {
+            TextView tvSub = new TextView(this);
+            tvSub.setText(sub);
+            tvSub.setTextSize(11f);
+            tvSub.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+            tvSub.setPadding(0, 6, 0, 0);
+            texts.addView(tvSub);
+        }
+        row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView chevron = new TextView(this);
+        chevron.setText(isPersian ? "‹" : "›");
+        chevron.setTextSize(18f);
+        chevron.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        chevron.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        row.addView(chevron);
+
+        row.setOnClickListener(onTap);
+        return row;
+    }
+
+    /**
+     * پس‌زمینه‌ی شیت را به کانتینر نوردیک (سطح + گوشه‌ی گرد بالا + بوردر) عوض می‌کند.
+     * از getIdentifier استفاده می‌کنیم تا به نام R کتابخانه material وابسته نباشیم.
+     */
+    private void styleNordicSheet(android.app.Dialog dialog) {
+        int bsId = getResources().getIdentifier("design_bottom_sheet", "id", getPackageName());
+        if (bsId == 0) return;
+        View bs = dialog.findViewById(bsId);
+        if (bs != null) bs.setBackgroundResource(R.drawable.bg_nordic_sheet);
+    }
+
+    private View nordicDivider() {
+        View v = new View(this);
+        v.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        v.setBackgroundColor(ContextCompat.getColor(this, R.color.nordic_border));
+        return v;
+    }
 
     private void showVaultOptionsMenu() {
-        String[] opts = isPersian
-                ? new String[]{"گزارش سلامت رمزها", "ترتیب لیست"}
-                : new String[]{"Password Health Report", "List Order"};
-        new AlertDialog.Builder(this)
-                .setTitle(isPersian ? "بیشتر" : "More")
-                .setItems(opts, (d, which) -> {
-                    if (which == 0) showPasswordHealthDialog();
-                    else showSortDialog();
-                })
-                .show();
+        LinearLayout root = nordicSheetRoot();
+        root.addView(nordicSheetTitle(isPersian ? "بیشتر" : "More"));
+
+        final BottomSheetDialog sheet = new BottomSheetDialog(this);
+        sheet.setContentView(root);
+        styleNordicSheet(sheet);
+
+        String currentSort;
+        if (isPersian) {
+            currentSort = new String[]{"پیش‌فرض (ترتیب ثبت)", "عنوان (الفبا)", "دسته‌بندی", "آخرین به‌روزرسانی"}[
+                    Math.max(0, Math.min(3, prefs.getInt("vault_sort_mode", 0)))];
+        } else {
+            currentSort = new String[]{"Default (creation order)", "Title (A-Z)", "Category", "Recently updated"}[
+                    Math.max(0, Math.min(3, prefs.getInt("vault_sort_mode", 0)))];
+        }
+
+        root.addView(nordicMenuRow(isPersian ? "💪 گزارش سلامت رمزها" : "Password health report",
+                isPersian ? "تکراری، ضعیف، کهنه — کاملاً آفلاین" : "Reused, weak and stale — fully offline",
+                v -> { sheet.dismiss(); showPasswordHealthDialog(); }));
+        root.addView(nordicDivider());
+        root.addView(nordicMenuRow(isPersian ? "↕ ترتیب لیست" : "List order",
+                currentSort,
+                v -> { sheet.dismiss(); showSortDialog(); }));
+        root.addView(nordicDivider());
+        String archiveSub = isPersian
+                ? (archivedItems.isEmpty() ? "خالی" : archivedItems.size() + " آیتم — تا ۳۰ روز قابل بازگردانی")
+                : (archivedItems.isEmpty() ? "empty" : archivedItems.size() + " item(s) — restorable for 30 days");
+        root.addView(nordicMenuRow(isPersian ? "🗃 بایگانی" : "Archive",
+                archiveSub,
+                v -> { sheet.dismiss(); showArchiveSheet(); }));
+        root.addView(nordicDivider());
+        root.addView(nordicMenuRow(isPersian ? "📓 دفترچه فعالیت" : "Activity log",
+                isPersian ? "۲۰ رویداد اخیر (رمزنگاری‌شده در ولت)" : "Last 200 events (encrypted in the vault)",
+                v -> { sheet.dismiss(); showActivityLogSheet(); }));
+        sheet.show();
+    }
+
+    // ---------- بایگانی: بازگردانی یا حذف قطعی ----------
+
+    private void showArchiveSheet() {
+        final BottomSheetDialog[] selfRef = new BottomSheetDialog[1];
+        LinearLayout root = nordicSheetRoot();
+        root.addView(nordicSheetTitle(isPersian ? "🗃 بایگانی" : "Archive"));
+        LinearLayout.LayoutParams tParams = (LinearLayout.LayoutParams) root.getChildAt(0).getLayoutParams();
+        tParams.bottomMargin = 8;
+        root.getChildAt(0).setLayoutParams(tParams);
+
+        TextView tvNote = new TextView(this);
+        tvNote.setText(isPersian
+                ? "آیتم‌های بایگانی‌شده تا ۳۰ روز نگه داشته می‌شوند و بعد از آن خودکار حذف می‌شوند."
+                : "Archived items are kept for 30 days, then purged automatically.");
+        tvNote.setTextSize(11.5f);
+        tvNote.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        tvNote.setPadding(0, 0, 0, 20);
+        root.addView(tvNote);
+
+        if (archivedItems.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText(isPersian ? "بایگانی خالی است." : "Archive is empty.");
+            tvEmpty.setTextSize(14f);
+            tvEmpty.setPadding(0, 16, 0, 24);
+            tvEmpty.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+            root.addView(tvEmpty);
+        } else {
+            for (VaultItem archived : new ArrayList<>(archivedItems)) {
+                LinearLayout rowCard = new LinearLayout(this);
+                rowCard.setOrientation(LinearLayout.VERTICAL);
+                rowCard.setBackgroundResource(R.drawable.bg_nordic_field);
+                rowCard.setPadding(28, 22, 28, 22);
+                LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                rcLp.bottomMargin = 16;
+                rowCard.setLayoutParams(rcLp);
+
+                TextView tvT = new TextView(this);
+                tvT.setText(archived.getTitle() == null || archived.getTitle().isEmpty()
+                        ? (isPersian ? "بی‌نام" : "untitled") : archived.getTitle());
+                tvT.setTextSize(14.5f);
+                tvT.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+                tvT.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+                rowCard.addView(tvT);
+
+                long ref = archived.getUpdatedAt() > 0 ? archived.getUpdatedAt() : archived.getCreatedAt();
+                if (ref > 0) {
+                    TextView tvD = new TextView(this);
+                    tvD.setText((isPersian ? "بایگانی‌شده: " : "archived: ") + formatVaultDate(ref));
+                    tvD.setTextSize(10.5f);
+                    tvD.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+                    tvD.setPadding(0, 6, 0, 12);
+                    rowCard.addView(tvD);
+                }
+
+                LinearLayout actions = new LinearLayout(this);
+                actions.setOrientation(LinearLayout.HORIZONTAL);
+
+                MaterialButton btnRestore = new MaterialButton(this);
+                btnRestore.setText(isPersian ? "بازگردانی" : "Restore");
+                btnRestore.setTextSize(11.5f);
+                LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                rLp.setMarginEnd(10);
+                btnRestore.setLayoutParams(rLp);
+                btnRestore.setBackgroundTintList(ColorStateList.valueOf(
+                        ContextCompat.getColor(this, R.color.nordic_primary_btn_bg)));
+                btnRestore.setTextColor(ContextCompat.getColor(this, R.color.nordic_primary_btn_text));
+                btnRestore.setCornerRadius(12);
+
+                MaterialButton btnPurge = new MaterialButton(this);
+                btnPurge.setText(isPersian ? "حذف قطعی" : "Delete forever");
+                btnPurge.setTextSize(11.5f);
+                btnPurge.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                btnPurge.setBackgroundColor(Color.TRANSPARENT);
+                btnPurge.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#EF4444")));
+                btnPurge.setStrokeWidth(2);
+                btnPurge.setTextColor(Color.parseColor("#EF4444"));
+                btnPurge.setCornerRadius(12);
+
+                final String itemId = archived.getId();
+                btnRestore.setOnClickListener(v -> {
+                    new Thread(() -> {
+                        try {
+                            dbHelper.setArchived(itemId, false);
+                            dbHelper.logActivity("RESTORE_ITEM", itemId);
+                            runOnUiThread(() -> {
+                                loadVaultData();
+                                Toast.makeText(this, isPersian ? "به ولت بازگشت" : "Restored to vault",
+                                        Toast.LENGTH_SHORT).show();
+                                if (selfRef[0] != null) selfRef[0].dismiss();
+                                showArchiveSheet(); // رفرش خود شیت
+                            });
+                        } catch (Exception e) {
+                            runOnUiThread(() -> Toast.makeText(this,
+                                    isPersian ? "بازگردانی ناموفق بود" : "Restore failed",
+                                    Toast.LENGTH_SHORT).show());
+                        }
+                    }).start();
+                });
+                btnPurge.setOnClickListener(v -> new AlertDialog.Builder(this)
+                        .setTitle(isPersian ? "حذف قطعی" : "Delete forever")
+                        .setMessage(isPersian
+                                ? "«" + tvT.getText() + "» برای همیشه حذف شود؟ این عمل قابل بازگشت نیست."
+                                : "Permanently delete \"" + tvT.getText() + "\"? This cannot be undone.")
+                        .setPositiveButton(isPersian ? "حذف" : "Delete", (d, w) -> new Thread(() -> {
+                            try {
+                                dbHelper.deleteItem(itemId);
+                                dbHelper.logActivity("DELETE", itemId);
+                                runOnUiThread(() -> {
+                                    loadVaultData();
+                                    Toast.makeText(this, isPersian ? "برای همیشه حذف شد" : "Deleted permanently",
+                                            Toast.LENGTH_SHORT).show();
+                                    if (selfRef[0] != null) selfRef[0].dismiss();
+                                    showArchiveSheet();
+                                });
+                            } catch (Exception e) {
+                                runOnUiThread(() -> Toast.makeText(this,
+                                        isPersian ? "حذف ناموفق بود" : "Delete failed",
+                                        Toast.LENGTH_SHORT).show());
+                            }
+                        }).start())
+                        .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
+                        .show());
+
+                actions.addView(btnRestore);
+                actions.addView(btnPurge);
+                rowCard.addView(actions);
+                root.addView(rowCard);
+            }
+        }
+        selfRef[0] = showNordicSheet(root);
+    }
+
+    // ---------- دفترچه فعالیت ----------
+
+    private void showActivityLogSheet() {
+        LinearLayout root = nordicSheetRoot();
+        root.addView(nordicSheetTitle(isPersian ? "📓 دفترچه فعالیت" : "Activity log"));
+        ((LinearLayout.LayoutParams) root.getChildAt(0).getLayoutParams()).bottomMargin = 8;
+
+        TextView tvNote = new TextView(this);
+        tvNote.setText(isPersian
+                ? "۲۰ رویداد اخیر، فقط در دیتابیس رمزنگاری‌شده همین دستگاه — هیچ‌جا ارسال نمی‌شود."
+                : "Last 200 events, stored only in this device's encrypted database — never sent anywhere.");
+        tvNote.setTextSize(11.5f);
+        tvNote.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+        tvNote.setPadding(0, 0, 0, 20);
+        root.addView(tvNote);
+
+        final BottomSheetDialog logSheet = new BottomSheetDialog(this);
+        logSheet.setContentView(root);
+        styleNordicSheet(logSheet);
+        logSheet.show(); // وضعیت «در حال خواندن» — ردیف‌ها بعداً روی همان شیت سوار می‌شوند
+
+        new Thread(() -> {
+            final List<VaultDatabaseHelper.LogEntry> entries;
+            final java.util.HashMap<String, String> titles = new java.util.HashMap<>();
+            try {
+                entries = dbHelper.getActivityLog();
+                for (VaultItem it : archivedItems) titles.put(it.getId(), it.getTitle());
+                if (adapter != null) {
+                    for (VaultItem it : adapter.getFullSnapshot()) titles.put(it.getId(), it.getTitle());
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        isPersian ? "خواندن دفترچه ناموفق بود" : "Could not read the log",
+                        Toast.LENGTH_SHORT).show());
+                return;
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isChangingConfigurations()) return;
+                if (entries.isEmpty()) {
+                    TextView tvEmpty = new TextView(this);
+                    tvEmpty.setText(isPersian ? "فعلیتی ثبت نشده است." : "No activity recorded yet.");
+                    tvEmpty.setTextSize(14f);
+                    tvEmpty.setPadding(0, 12, 0, 20);
+                    tvEmpty.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+                    root.addView(tvEmpty);
+                } else {
+                    SimpleDateFormat fmt = new SimpleDateFormat(isPersian ? "yyyy/MM/dd HH:mm" : "yyyy-MM-dd HH:mm", Locale.US);
+                    int shown = 0;
+                    for (VaultDatabaseHelper.LogEntry en : entries) {
+                        if (shown++ >= 60) break; // از نظر UI هم محدود بماند
+                        LinearLayout row = new LinearLayout(this);
+                        row.setOrientation(LinearLayout.HORIZONTAL);
+                        TextView tvWhat = new TextView(this);
+                        tvWhat.setText(activityKindLabel(en.kind) + (en.itemId != null && titles.containsKey(en.itemId)
+                                ? " · " + titles.get(en.itemId) : ""));
+                        tvWhat.setTextSize(12.5f);
+                        tvWhat.setTypeface(Typeface.MONOSPACE);
+                        tvWhat.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_primary));
+                        row.addView(tvWhat, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                        TextView tvWhen = new TextView(this);
+                        tvWhen.setText(fmt.format(new java.util.Date(en.ts)));
+                        tvWhen.setTextSize(10f);
+                        tvWhen.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+                        row.addView(tvWhen);
+                        row.setPadding(0, 14, 0, 14);
+                        root.addView(row);
+                        if (shown < Math.min(60, entries.size())) root.addView(nordicDivider());
+                    }
+                    if (entries.size() > 60) {
+                        TextView tvMore = new TextView(this);
+                        tvMore.setText(isPersian ? ("… " + (entries.size() - 60) + " رویداد قدیمی‌تر")
+                                                 : ("… " + (entries.size() - 60) + " older events"));
+                        tvMore.setTextSize(11f);
+                        tvMore.setPadding(0, 12, 0, 0);
+                        tvMore.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+                        root.addView(tvMore);
+                    }
+                }
+                MaterialButton btnClear = new MaterialButton(this);
+                btnClear.setText(isPersian ? "پاک کردن دفترچه" : "Clear log");
+                btnClear.setTextSize(11.5f);
+                LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                cLp.topMargin = 20;
+                btnClear.setLayoutParams(cLp);
+                btnClear.setBackgroundColor(Color.TRANSPARENT);
+                btnClear.setStrokeColor(ColorStateList.valueOf(
+                        ContextCompat.getColor(this, R.color.nordic_border)));
+                btnClear.setStrokeWidth(2);
+                btnClear.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
+                btnClear.setCornerRadius(12);
+                btnClear.setOnClickListener(v -> new AlertDialog.Builder(this)
+                        .setTitle(isPersian ? "پاک کردن دفترچه" : "Clear activity log")
+                        .setMessage(isPersian ? "همه‌ی رویدادها حذف شوند؟" : "Delete all recorded events?")
+                        .setPositiveButton(isPersian ? "پاک کردن" : "Clear", (d, w) -> new Thread(() -> {
+                            try {
+                                dbHelper.clearActivityLog();
+                            } catch (Exception ignored) {
+                            }
+                            runOnUiThread(() -> Toast.makeText(this,
+                                    isPersian ? "دفترچه پاک شد" : "Log cleared",
+                                    Toast.LENGTH_SHORT).show());
+                        }).start())
+                        .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
+                        .show());
+                root.addView(btnClear);
+            });
+        }).start();
+    }
+
+    private String activityKindLabel(String kind) {
+        if (kind == null) return "?";
+        switch (kind) {
+            case "VIEW": return isPersian ? "مشاهده" : "viewed";
+            case "COPY_PASSWORD": return isPersian ? "کپی رمز" : "copied password";
+            case "COPY_USERNAME": return isPersian ? "کپی نام کاربری" : "copied username";
+            case "COPY_TOTP": return isPersian ? "کپی کد 2FA" : "copied 2FA code";
+            case "COPY_WEBSITE": return isPersian ? "کپی وبسایت" : "copied website";
+            case "COPY_NOTES": return isPersian ? "کپی یادداشت" : "copied notes";
+            case "ADD": return isPersian ? "افزودن" : "added";
+            case "EDIT": return isPersian ? "ویرایش" : "edited";
+            case "PIN": return isPersian ? "پین" : "pinned";
+            case "UNPIN": return isPersian ? "برداشتن پین" : "unpinned";
+            case "ARCHIVE": return isPersian ? "بایگانی" : "archived";
+            case "RESTORE_ITEM": return isPersian ? "بازگردانی از بایگانی" : "restored from archive";
+            case "DELETE": return isPersian ? "حذف قطعی" : "deleted forever";
+            case "BACKUP": return isPersian ? "خروجی بکاپ" : "backup exported";
+            case "RESTORE": return isPersian ? "بازیابی از بکاپ" : "restored from backup";
+            default: return kind.toLowerCase(Locale.ROOT);
+        }
     }
 
     private void showSortDialog() {
@@ -1642,6 +2320,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 dbHelper.setPinned(itemId, wantPinned);
+                dbHelper.logActivity(wantPinned ? "PIN" : "UNPIN", itemId);
                 runOnUiThread(() -> {
                     if (isFinishing() || isChangingConfigurations()) return;
                     // دوباره مرتب‌سازی: آیتم پین‌شده بالای لیست می‌رود
@@ -1705,6 +2384,101 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return swipeIconPin;
+    }
+
+    // ================= بایگانی (اسوایپ به بالا، جایگزین حذف آنی) =================
+
+    private void handleArchiveSwipe(RecyclerView.ViewHolder viewHolder) {
+        int pos = viewHolder.getAdapterPosition();
+        if (pos == RecyclerView.NO_POSITION || adapter == null) return;
+        VaultItem item = adapter.getItem(pos);
+        if (item == null) {
+            adapter.notifyItemChanged(pos);
+            return;
+        }
+        adapter.notifyItemChanged(pos); // ردیف را همان لحظه برگردان تا با خطا گم نشود
+        final String itemId = item.getId();
+        new Thread(() -> {
+            try {
+                dbHelper.setArchived(itemId, true);
+                dbHelper.logActivity("ARCHIVE", itemId);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isChangingConfigurations()) return;
+                    loadVaultData();
+                    Toast.makeText(this, isPersian
+                            ? "«" + item.getTitle() + "» به بایگانی رفت — تا ۳۰ روز قابل بازگردانی"
+                            : "\"" + item.getTitle() + "\" archived — restorable for 30 days",
+                            Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this,
+                        isPersian ? "بایگانی ناموفق بود؛ دوباره تلاش کنید" : "Archive failed; try again",
+                        Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
+    /** رونمایه بایگانی هنگام کشیدن ردیف به بالا — نوار خنثی با آیکن و متن. */
+    private void drawArchiveOverlay(Canvas canvas, RecyclerView.ViewHolder holder, float dY) {
+        View itemView = holder.itemView;
+        float top = itemView.getTop();
+        float bottom = itemView.getBottom();
+        float reveal = Math.min(-dY, bottom - top);
+        if (reveal < 4f) return;
+        float radius = 24f;
+        swipePaint.setColor(isDarkMode ? SWIPE_ARCHIVE_COLOR : 0xFFD4D4D8);
+        canvas.drawRoundRect(itemView.getLeft(), bottom - reveal, itemView.getRight(), bottom, radius, radius, swipePaint);
+
+        String label = isPersian ? "🗃 بایگانی" : "archive";
+        swipePaint.setTextSize(11 * getResources().getDisplayMetrics().scaledDensity);
+        float textW = swipePaint.measureText(label);
+        float cx = (itemView.getLeft() + itemView.getRight()) / 2f;
+        float iconSize = 18 * getResources().getDisplayMetrics().density;
+        float totalW = textW + iconSize + 8 * getResources().getDisplayMetrics().density;
+        float startX = cx - totalW / 2f;
+        float baseY = bottom - reveal / 2f - (swipePaint.ascent() + swipePaint.descent()) / 2f;
+        swipePaint.setColor(isDarkMode ? 0xFFF4F4F5 : 0xFF09090B);
+        canvas.drawText(label, startX + iconSize + 8 * getResources().getDisplayMetrics().density, baseY, swipePaint);
+        Drawable archive = getArchiveIcon();
+        if (archive != null) {
+            archive.setBounds(Math.round(startX), Math.round(bottom - reveal / 2f - iconSize / 2f),
+                    Math.round(startX + iconSize), Math.round(bottom - reveal / 2f + iconSize / 2f));
+            archive.draw(canvas);
+        }
+    }
+
+    private Drawable getArchiveIcon() {
+        if (swipeIconArchive == null) {
+            swipeIconArchive = ContextCompat.getDrawable(this, R.drawable.ic_archive);
+            if (swipeIconArchive != null) {
+                swipeIconArchive = swipeIconArchive.mutate();
+                swipeIconArchive.setTint(isDarkMode ? Color.parseColor("#F4F4F5") : Color.parseColor("#09090B"));
+            }
+        }
+        return swipeIconArchive;
+    }
+
+    /** ثبت رویداد در دفترچه فعالیت — آتش‌ونسیان (هرگز مسیر اصلی را بلاک/نشکند). */
+    private void logActivity(String kind, String itemId) {
+        if (dbHelper == null) return;
+        new Thread(() -> {
+            try {
+                dbHelper.logActivity(kind, itemId);
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
+
+    /** اعمال انتخاب چیپ (۰=همه، ۱..۴ دسته‌ها) — فیلتر و تیک ظاهری. */
+    private void applyChipSelection(int idx, boolean notifyAdapter) {
+        if (chipGroup == null) return;
+        int[] ids = {R.id.chipAll, R.id.chipLogin, R.id.chipCard, R.id.chipWifi, R.id.chipNote};
+        int targetId = idx == 0 ? R.id.chipAll : ids[idx];
+        if (chipGroup.getCheckedChipId() != targetId) {
+            chipGroup.check(targetId);
+        }
+        String cat = idx == 0 ? null : new String[]{"LOGIN", "CARD", "WIFI", "NOTE"}[idx - 1];
+        if (adapter != null) adapter.setCategoryFilter(cat);
     }
 
     // ================= بکاپ / بازیابی =================
@@ -1837,9 +2611,15 @@ public class MainActivity extends AppCompatActivity {
     private void doBackupExport(String backupPassword, AlertDialog dialog, MaterialButton busyButton) {
         new Thread(() -> {
             try {
-                List<VaultItem> items = dbHelper.getAllDecryptedItems(cryptoManager, null);
+                List<VaultItem> all = dbHelper.getAllDecryptedItems(cryptoManager, null);
+                // بکاپ فقط آیتم‌های فعال را می‌گیرد؛ بایگانی عمداً فراموش‌شده است
+                List<VaultItem> items = new ArrayList<>();
+                for (VaultItem it : all) {
+                    if (!it.isArchived()) items.add(it);
+                }
                 String json = buildBackupJson(items);
                 byte[] fileBytes = BackupManager.encrypt(json, backupPassword);
+                dbHelper.logActivity("BACKUP", null);
 
                 File base = getExternalFilesDir(null) != null ? getExternalFilesDir(null) : getFilesDir();
                 File dir = new File(base, "backups");
@@ -2029,6 +2809,7 @@ public class MainActivity extends AppCompatActivity {
                 for (VaultItem it : items) {
                     dbHelper.insertItem(it, cryptoManager);
                 }
+                dbHelper.logActivity("RESTORE", null);
                 final int count = items.size();
                 runOnUiThread(() -> {
                     if (isFinishing() || isChangingConfigurations()) return;

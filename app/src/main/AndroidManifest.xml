@@ -37,5 +37,17 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- کاشی «قفل ولت» در تنظیمات سریع (Quick Settings) -->
+        <service
+            android:name=".LockVaultTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_lock"
+            android:label="Lock OfflinePW"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
