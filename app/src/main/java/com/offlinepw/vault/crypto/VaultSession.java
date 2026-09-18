@@ -11,6 +11,19 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class VaultSession {
     private static volatile SecretKey dek;
+    /**
+     * پرچم ولت فریبنده — صرفاً مسیر فایل دیتابیس را عوض می‌کند.
+     * هیچ‌گاه در prefs ذخیره نمی‌شود؛ عمرش به عمر نشست (clear) محدود است.
+     */
+    private static volatile boolean decoy = false;
+
+    public static void setDecoy(boolean isDecoy) {
+        decoy = isDecoy;
+    }
+
+    public static boolean isDecoy() {
+        return decoy;
+    }
 
     public static void setDek(SecretKey key) {
         clear(); // اگر کلید قبلی پاک‌نشده مانده بود، اول پاکش کن
@@ -28,6 +41,7 @@ public class VaultSession {
     public static void clear() {
         SecretKey current = dek;
         dek = null;
+        decoy = false; // حالت فریبنده هم با قفل شدن نشست پاک می‌شود
         if (current != null) {
             try {
                 byte[] encoded = current.getEncoded();

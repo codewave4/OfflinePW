@@ -148,8 +148,12 @@ public class MainActivity extends AppCompatActivity {
         public static final String COLUMN_ARCHIVED = "archived";
         public static final String TABLE_LOG = "activity_log";
 
+        /** فایل دیتابیس ولت فریبنده — ساختار دقیقاً یکسان، کلید و محتوا جدا. */
+        public static final String DECOY_DB_NAME = "offline_pw_vault_b.db";
+
         public VaultDatabaseHelper(Context context) {
-            super(context, "offline_pw_vault.db", null, 6);
+            super(context, com.offlinepw.vault.crypto.VaultSession.isDecoy()
+                    ? DECOY_DB_NAME : "offline_pw_vault.db", null, 6);
         }
 
         private void createLogTable(SQLiteDatabase db) {
@@ -2720,6 +2724,8 @@ public class MainActivity extends AppCompatActivity {
         JSONObject root = new JSONObject();
         root.put("format", "offlinepw-backup-v1-vault");
         root.put("app", "OfflinePW");
+        // برچسب نوع ولت — هنگام import اگر با نشست فعلی نخواند هشدار داده می‌شود
+        root.put("vault_kind", com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "decoy" : "primary");
         root.put("created_at", new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US)
                 .format(new java.util.Date()));
         JSONArray arr = new JSONArray();
@@ -2815,6 +2821,7 @@ public class MainActivity extends AppCompatActivity {
                 if (!"offlinepw-backup-v1-vault".equals(root.optString("format", ""))) {
                     throw new IllegalArgumentException("bad backup format");
                 }
+                final String backupKind = root.optString("vault_kind", "");
                 JSONArray arr = root.getJSONArray("items");
                 List<VaultItem> items = new ArrayList<>();
                 for (int i = 0; i < arr.length(); i++) {
@@ -2837,11 +2844,18 @@ public class MainActivity extends AppCompatActivity {
                     if (isFinishing() || isChangingConfigurations()) return;
                     dialog.dismiss();
                     busyButton.setEnabled(true);
+                    String kindWarn = "";
+                    String expectedKind = com.offlinepw.vault.crypto.VaultSession.isDecoy() ? "decoy" : "primary";
+                    if (!backupKind.isEmpty() && !expectedKind.equals(backupKind)) {
+                        kindWarn = isPersian
+                                ? "\n⚠️ این بکاپ برای ولت دیگری ساخته شده — بازیابی در ولت فعلی!"
+                                : "\n⚠️ This backup was made for the other vault — restoring into the current one!";
+                    }
                     styleNordicDialog(new AlertDialog.Builder(this)
                             .setTitle(isPersian ? "بازیابی بکاپ" : "Restore Backup")
                             .setMessage(isPersian
-                                    ? ("بکاپ " + count + " آیتم دارد.\nآیتم‌هایی که شناسه‌ی یکسان دارند بروزرسانی و بقیه به‌عنوان جدید اضافه می‌شوند.\nادامه می‌دهید؟")
-                                    : ("The backup contains " + count + " item(s).\nItems with the same ID will be updated, the rest will be added.\nContinue?"))
+                                    ? ("بکاپ " + count + " آیتم دارد.\nآیتم‌هایی که شناسه‌ی یکسان دارند بروزرسانی و بقیه به‌عنوان جدید اضافه می‌شوند.\nادامه می‌دهید؟" + kindWarn)
+                                    : ("The backup contains " + count + " item(s).\nItems with the same ID will be updated, the rest will be added.\nContinue?" + kindWarn))
                             .setPositiveButton(isPersian ? "بازیابی" : "Restore", (d, w) -> writeImportedItems(items))
                             .setNegativeButton(isPersian ? "انصراف" : "Cancel", null)
                             .show(), Color.parseColor("#F59E0B"));

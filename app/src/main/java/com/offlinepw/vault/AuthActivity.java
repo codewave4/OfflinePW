@@ -13,8 +13,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
+import com.offlinepw.vault.crypto.CryptoManager;
 import com.offlinepw.vault.crypto.VaultSession;
 import java.io.File;
+import java.util.UUID;
 import java.security.SecureRandom;
 import java.security.spec.KeySpec;
 import javax.crypto.Cipher;
@@ -40,6 +42,11 @@ public class AuthActivity extends AppCompatActivity {
     private static final String KEY_KEK_SALT = "kek_salt";
     private static final String KEY_WRAPPED_DEK = "wrapped_dek";
     private static final String KEY_FAILED_ATTEMPTS = "failed_attempts";
+    // ولت فریبنده — نام کلیدها عمداً خنثی («recovery») است تا در prefs هم چیزی
+    // لو نرود؛ و فایل DB جدا دارد.
+    private static final String KEY_RECOVERY_SALT = "recovery_kek_salt";
+    private static final String KEY_RECOVERY_WRAPPED_DEK = "recovery_wrapped_dek";
+    private static final String DECOY_DB_NAME = MainActivity.VaultDatabaseHelper.DECOY_DB_NAME;
 
     private static final int PBKDF2_ITERATIONS = 600000;
     private static final int KEK_LENGTH_BITS = 256;
@@ -54,6 +61,9 @@ public class AuthActivity extends AppCompatActivity {
     private TextView tvAuthWarning;
     private TextInputLayout tilMasterPassword;
     private TextInputEditText etMasterPassword;
+    private TextInputLayout tilDecoyPassword;
+    private TextInputEditText etDecoyPassword;
+    private String tempDecoyToConfirm = null;
     private MaterialButton btnUnlock;
     private MaterialButton btnAuthLang;
     private boolean isSettingUpPin = false;
@@ -77,6 +87,8 @@ public class AuthActivity extends AppCompatActivity {
         tvAuthWarning = findViewById(R.id.tvAuthWarning);
         tilMasterPassword = findViewById(R.id.tilMasterPassword);
         etMasterPassword = findViewById(R.id.etMasterPassword);
+        tilDecoyPassword = findViewById(R.id.tilDecoyPassword);
+        etDecoyPassword = findViewById(R.id.etDecoyPassword);
         btnUnlock = findViewById(R.id.btnUnlock);
         btnAuthLang = findViewById(R.id.btnAuthLang);
 
@@ -158,6 +170,15 @@ public class AuthActivity extends AppCompatActivity {
         if (tilMasterPassword != null) {
             tilMasterPassword.setHint(isPersian ? "رمز عبور مستر" : "Master Password");
         }
+        // فیلد ولت فریبنده فقط در مرحله اولِ ساخت ولت دیده می‌شود؛ بعد از آن هیچ‌گاه.
+        if (tilDecoyPassword != null) {
+            boolean showDecoy = isSettingUpPin && tempPasswordToConfirm == null;
+            tilDecoyPassword.setVisibility(showDecoy ? View.VISIBLE : View.GONE);
+            if (showDecoy) {
+                tilDecoyPassword.setHint(isPersian
+                        ? "رمز ولت فریبنده — اختیاری" : "Decoy vault password — optional");
+            }
+        }
         setUnlockButtonBusy(false);
 
         updateWarningText();
@@ -205,15 +226,36 @@ public class AuthActivity extends AppCompatActivity {
                 return;
             }
             if (tempPasswordToConfirm == null) {
+                String decoyEntered = (etDecoyPassword != null && etDecoyPassword.getText() != null)
+                        ? etDecoyPassword.getText().toString() : "";
+                if (!decoyEntered.isEmpty()) {
+                    if (decoyEntered.length() < MIN_PASSWORD_LENGTH) {
+                        Toast.makeText(this, isPersian
+                                ? ("رمز فریبنده هم باید حداقل " + MIN_PASSWORD_LENGTH + " کاراکتر باشد")
+                                : ("Decoy password must also be at least " + MIN_PASSWORD_LENGTH + " characters"),
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (decoyEntered.equals(entered)) {
+                        Toast.makeText(this, isPersian
+                                ? "رمز ولت فریبنده باید با رمز اصلی متفاوت باشد"
+                                : "Decoy password must differ from the master password",
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
+                tempDecoyToConfirm = decoyEntered.isEmpty() ? null : decoyEntered;
+                if (etDecoyPassword != null) etDecoyPassword.setText("");
                 tempPasswordToConfirm = entered;
                 if (etMasterPassword != null) etMasterPassword.setText("");
                 updateTexts();
             } else {
                 if (tempPasswordToConfirm.equals(entered)) {
-                    createNewVaultKey(entered);
+                    createNewVaultKey(entered, tempDecoyToConfirm);
                 } else {
                     Toast.makeText(this, isPersian ? "رمزها مطابقت ندارند، دوباره امتحان کنید" : "Passwords do not match, try again", Toast.LENGTH_SHORT).show();
                     tempPasswordToConfirm = null;
+                    tempDecoyToConfirm = null;
                     if (etMasterPassword != null) etMasterPassword.setText("");
                     updateTexts();
                 }
@@ -237,7 +279,7 @@ public class AuthActivity extends AppCompatActivity {
                 : (isPersian ? "باز کردن" : "Unlock"));
     }
 
-    private void createNewVaultKey(String password) {
+    private void createNewVaultKey(String password, final String decoyPassword) {
         setUnlockButtonBusy(true);
         new Thread(() -> {
             try {
@@ -250,15 +292,41 @@ public class AuthActivity extends AppCompatActivity {
 
                 final String wrappedDek = wrapDek(dek, kek);
 
+                // ── ولت فریبنده ──
+                // کلید دوم کاملاً مستقل: salt و DEK و wrapped-dek خودش. اگر رمز فریبنده
+                // داده نشده باشد هیچ اثری از این مسیر در prefs/دیسک نمی‌ماند.
+                final boolean hasDecoy = decoyPassword != null && !decoyPassword.isEmpty();
+                final SecretKey dek2;
+                final String wrappedDek2;
+                final byte[] salt2;
+                if (hasDecoy) {
+                    salt2 = generateRandomBytes(SALT_LENGTH_BYTES);
+                    SecretKey kek2 = deriveKek(decoyPassword, salt2);
+                    KeyGenerator dekGen2 = KeyGenerator.getInstance("AES");
+                    dekGen2.init(DEK_LENGTH_BITS, new SecureRandom());
+                    dek2 = dekGen2.generateKey();
+                    wrappedDek2 = wrapDek(dek2, kek2);
+                } else {
+                    dek2 = null; wrappedDek2 = null; salt2 = null;
+                }
+
+                final android.content.SharedPreferences.Editor ed = authPrefs.edit();
+                ed.putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                        .putString(KEY_WRAPPED_DEK, wrappedDek)
+                        .putBoolean(KEY_IS_SETUP, true)
+                        .putInt(KEY_FAILED_ATTEMPTS, 0);
+                if (hasDecoy) {
+                    ed.putString(KEY_RECOVERY_SALT, Base64.encodeToString(salt2, Base64.NO_WRAP))
+                            .putString(KEY_RECOVERY_WRAPPED_DEK, wrappedDek2);
+                }
+                ed.commit();
+
+                // دیتابیس فریبنده با چند آیتمِ باورپذیرِ بی‌خطر پر می‌شود تا
+                // «خالی بودن» زیر سؤال نبرد؛ خطایش نباید ساخت ولت اصلی را متوقف کند.
+                if (hasDecoy) seedDecoyVault(dek2);
+
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
-                    authPrefs.edit()
-                            .putString(KEY_KEK_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-                            .putString(KEY_WRAPPED_DEK, wrappedDek)
-                            .putBoolean(KEY_IS_SETUP, true)
-                            .putInt(KEY_FAILED_ATTEMPTS, 0)
-                            .apply();
-
                     VaultSession.setDek(dek);
                     setUnlockButtonBusy(false);
                     Toast.makeText(this, isPersian ? "رمز مستر با موفقیت ثبت شد" : "Master Password set successfully", Toast.LENGTH_SHORT).show();
@@ -274,6 +342,39 @@ public class AuthActivity extends AppCompatActivity {
         }).start();
     }
 
+    /** آیتم‌های نمایشیِ ولت فریبنده — روی DEK دوم و فایل DB دوم نوشته می‌شوند. */
+    private void seedDecoyVault(SecretKey dek2) {
+        try {
+            VaultSession.setDek(dek2); // clear() داخلش پرچم را صفر می‌کند؛ بعد از آن setDecoy
+            VaultSession.setDecoy(true);
+            MainActivity.VaultDatabaseHelper helper = new MainActivity.VaultDatabaseHelper(this);
+            CryptoManager crypto = new CryptoManager();
+            long now = System.currentTimeMillis();
+            long day = 24L * 3600 * 1000L;
+            String[][] seeds = isPersian ? new String[][]{
+                    {"جیمیل قدیمی", "LOGIN", "old.account.1377@gmail.com", "Parvaz#1381", "فقط پوشه اسپمش چک میشه", "", "gmail.com", "41"},
+                    {"وای‌فای خانه", "WIFI", "TP-Link_Home2.4G", "447711990012abcd", "پسوند مودم اتاق", "", "", "12"},
+                    {"نتفلیکس (اشتراکی)", "LOGIN", "share.acct@inbox.test", "N3tfl1x-Demo!", "حساب اشتراکی با همخونه", "", "netflix.com", "33"},
+                    {"سامانه دانشگاه", "LOGIN", "st-81234567", "12345678aB", "نمرات ترم ۵", "", "edu-example.test", "60"}
+            } : new String[][]{
+                    {"Old Gmail", "LOGIN", "old.account.1998@gmail.com", "Parvaz#1381", "only the spam folder gets checked", "", "gmail.com", "41"},
+                    {"Home WiFi", "WIFI", "TP-Link_Home2.4G", "447711990012abcd", "bedroom router", "", "", "12"},
+                    {"Netflix (shared)", "LOGIN", "share.acct@inbox.test", "N3tfl1x-Demo!", "shared with roommate", "", "netflix.com", "33"},
+                    {"University Portal", "LOGIN", "st-81234567", "12345678aB", "semester 5 grades", "", "edu-example.test", "60"}
+            };
+            for (String[] r : seeds) {
+                long age = Long.parseLong(r[7]) * day;
+                helper.insertItem(new MainActivity.VaultItem(
+                        UUID.randomUUID().toString(), r[0], r[1], r[2], r[3], r[4],
+                        r[5], r[6], false, now - age, now - age), crypto);
+            }
+            helper.close();
+        } catch (Exception ignored) {
+        } finally {
+            VaultSession.setDecoy(false);
+        }
+    }
+
     /**
      * باز کردن قفل: PBKDF2 (۶۰۰k دور) و بازکردن DEK روی ترد پسزمینه انجام میشود
      * تا رابط کاربری فریز نشود و اپ بلافاصله پس از آمادهشدن کلید باز شود.
@@ -281,6 +382,8 @@ public class AuthActivity extends AppCompatActivity {
     private void attemptUnlockAsync(String password) {
         setUnlockButtonBusy(true);
         new Thread(() -> {
+            SecretKey unlocked = null;
+            boolean decoyHit = false;
             try {
                 String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
                 String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
@@ -289,24 +392,50 @@ public class AuthActivity extends AppCompatActivity {
                 }
                 byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
                 SecretKey kek = deriveKek(password, salt);
-                final SecretKey dek = unwrapDek(wrappedDek, kek);
-
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    VaultSession.setDek(dek);
-                    // تنها جایی که شمارندهی تلاشها ریست میشود: ورود موفق رمز درست.
-                    authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply();
-                    setUnlockButtonBusy(false);
-                    proceedToMain();
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    setUnlockButtonBusy(false);
-                    if (etMasterPassword != null) etMasterPassword.setText("");
-                    registerFailedAttempt();
-                });
+                unlocked = unwrapDek(wrappedDek, kek);
+            } catch (Exception primaryFail) {
+                // اگر ولت فریبنده تنظیم شده باشد، همین رمز ورودی روی کلید دوم هم
+                // امتحان می‌شود. هیچ پیام یا مسیر زمان‌بندی متفاوتی وجود ندارد که
+                // «رمز دوم» را لو بدهد؛ شکست هر دو = همان «رمز اشتباه» همیشگی.
+                String rSaltB64 = authPrefs.getString(KEY_RECOVERY_SALT, "");
+                String rWrapped = authPrefs.getString(KEY_RECOVERY_WRAPPED_DEK, "");
+                if (rSaltB64.isEmpty() || rWrapped.isEmpty()) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        setUnlockButtonBusy(false);
+                        if (etMasterPassword != null) etMasterPassword.setText("");
+                        registerFailedAttempt();
+                    });
+                    return;
+                }
+                try {
+                    byte[] salt2 = Base64.decode(rSaltB64, Base64.NO_WRAP);
+                    SecretKey kek2 = deriveKek(password, salt2);
+                    unlocked = unwrapDek(rWrapped, kek2);
+                    decoyHit = true;
+                } catch (Exception decoyFail) {
+                    runOnUiThread(() -> {
+                        if (isFinishing() || isDestroyed()) return;
+                        setUnlockButtonBusy(false);
+                        if (etMasterPassword != null) etMasterPassword.setText("");
+                        registerFailedAttempt();
+                    });
+                    return;
+                }
             }
+            final SecretKey dek = unlocked;
+            final boolean wasDecoy = decoyHit;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                VaultSession.setDek(dek);
+                // ترتیب مهم: setDek داخلش clear() صدا می‌زند که پرچم decoy را هم صفر
+                // می‌کند؛ پس پرچم باید بعد از آن ست شود.
+                VaultSession.setDecoy(wasDecoy);
+                // تنها جایی که شمارندهی تلاشها ریست میشود: ورود موفق رمز درست (در هر دو ولت).
+                authPrefs.edit().putInt(KEY_FAILED_ATTEMPTS, 0).apply();
+                setUnlockButtonBusy(false);
+                proceedToMain();
+            });
         }).start();
     }
 
@@ -352,6 +481,7 @@ public class AuthActivity extends AppCompatActivity {
         File dbDir = null;
         try {
             deleteDatabase(DB_NAME);
+            deleteDatabase(DECOY_DB_NAME); // ولت فریبنده (اگر باشد) هم؛ اگر نباشد no-op
         } catch (Exception ignored) {
             wipeOk = false;
         }
@@ -371,7 +501,8 @@ public class AuthActivity extends AppCompatActivity {
         }
         // ۲.۱) verify: هیچ اثری از دیتابیس (شامل فایلهای جانبی) باقی نمانده باشد
         if (dbDir != null) {
-            for (String name : new String[]{DB_NAME, DB_NAME + "-wal", DB_NAME + "-shm", DB_NAME + "-journal"}) {
+            for (String name : new String[]{DB_NAME, DB_NAME + "-wal", DB_NAME + "-shm", DB_NAME + "-journal",
+                    DECOY_DB_NAME, DECOY_DB_NAME + "-wal", DECOY_DB_NAME + "-shm", DECOY_DB_NAME + "-journal"}) {
                 if (new File(dbDir, name).exists()) wipeOk = false;
             }
         }

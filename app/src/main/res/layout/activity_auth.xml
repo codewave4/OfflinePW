@@ -110,6 +110,28 @@
             android:imeOptions="actionDone" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- فیلد ولت فریبنده — فقط در مرحله اولِ ساخت ولت دیده می‌شود (visibility در کد) -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilDecoyPassword"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:passwordToggleEnabled="true"
+        app:passwordToggleTint="@color/nordic_text_secondary"
+        app:boxStrokeColor="#F59E0B"
+        app:hintTextColor="#F59E0B">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etDecoyPassword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textPassword"
+            android:textColor="@color/nordic_text_primary"
+            android:textSize="16sp"
+            android:imeOptions="actionDone" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnUnlock"
         style="@style/Widget.Material3.Button"
