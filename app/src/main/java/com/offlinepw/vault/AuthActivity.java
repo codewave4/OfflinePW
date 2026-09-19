@@ -149,6 +149,26 @@ public class AuthActivity extends AppCompatActivity {
         }
 
         updateTexts();
+
+        // جلوگیری از دور زدن قفل با دکمه بازگشت/خروج گوشی
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (!isSettingUpPin) {
+                    // در حالت قفل، دکمه Back کل برنامه را می‌بندد تا به صفحات قبلی برنگردد
+                    finishAffinity();
+                } else {
+                    // در مرحله راه‌اندازی اولیه
+                    if (tempPasswordToConfirm != null) {
+                        tempPasswordToConfirm = null;
+                        tempDecoyToConfirm = null;
+                        updateTexts();
+                    } else {
+                        finish();
+                    }
+                }
+            }
+        });
     }
 
     @Override

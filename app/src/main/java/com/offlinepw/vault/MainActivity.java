@@ -792,6 +792,7 @@ public class MainActivity extends AppCompatActivity {
     private Uri pendingImportUri;
     private final ActivityResultLauncher<String[]> openBackupLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                isLaunchingFilePicker = false;
                 if (uri == null) return;
                 pendingImportUri = uri;
                 // grant موقتِ نتیجه‌ی ActivityResult ممکن است قبل از خواندنِ ترد پس‌زمینه
@@ -810,6 +811,7 @@ public class MainActivity extends AppCompatActivity {
     /** ذخیره‌ی بکاپ «بدون اینترنت» با انتخاب‌گر سیستمی (Downloads/Documents هر جایی که کاربر بخواهد). */
     private final ActivityResultLauncher<String> saveBackupLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/octet-stream"), uri -> {
+                isLaunchingFilePicker = false;
                 final byte[] data = pendingBackupBytes;
                 final int count = pendingBackupCount;
                 pendingBackupBytes = null;
@@ -844,9 +846,9 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isDarkMode = true;
     private boolean isPersian = false;
+    private boolean isLaunchingFilePicker = false;
     private SharedPreferences prefs;
 
-    private static final long AUTO_LOCK_DELAY_MS = 30 * 1000L; // قفل خودکار پس از ۳۰ ثانیه در پس‌زمینه
 
     // --- مدیریت فرم افزودن/ویرایش در چرخش صفحه ---
     private AlertDialog currentAddDialog;
@@ -861,7 +863,6 @@ public class MainActivity extends AppCompatActivity {
     private String lastCopiedText;         // فقط برای نسخه‌های قبل از Android 13 (بدون extras ماندگار)
 
     private Handler totpHandler = new Handler(Looper.getMainLooper());
-    private final Runnable autoLockRunnable = this::lockVaultNow;
     private Runnable totpRunnable = new Runnable() {
         private long lastTickSecond = -1;
 
@@ -1070,8 +1071,7 @@ public class MainActivity extends AppCompatActivity {
             // وگرنه (در حال ویرایش) بعد از بارگذاری لیست در loadVaultData باز می‌شود.
         }
 
-        loadVaultData();
-        scheduleAutoLock(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
+        loadVaultData(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
     }
 
     @Override
@@ -1085,7 +1085,6 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         totpHandler.post(totpRunnable);
-        cancelAutoLock();
         // اگر کلیپی متعلق به ما در کلیپ‌بورد مانده (مثلاً پروسه در میانه‌ی
         // مهلت ۴۵ ثانیه‌ی پاک‌سازی خاتمه یافته)، حالا پاکش می‌کنیم.
         clearStaleClipboard();
@@ -1095,7 +1094,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
         totpHandler.removeCallbacks(totpRunnable);
-        scheduleAutoLock();
+        if (!isChangingConfigurations() && !isLaunchingFilePicker) {
+            lockVaultNow();
+        }
     }
 
     @Override
@@ -1106,7 +1107,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {
         }
         totpHandler.removeCallbacks(totpRunnable);
-        totpHandler.removeCallbacks(autoLockRunnable);
         clipboardClearHandler.removeCallbacksAndMessages(null);
     }
 
@@ -1130,15 +1130,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static String fieldValue(android.widget.EditText et) {
         return (et != null && et.getText() != null) ? et.getText().toString() : "";
-    }
-
-    private void scheduleAutoLock() {
-        cancelAutoLock();
-        totpHandler.postDelayed(autoLockRunnable, AUTO_LOCK_DELAY_MS);
-    }
-
-    private void cancelAutoLock() {
-        totpHandler.removeCallbacks(autoLockRunnable);
     }
 
     /**
@@ -2104,7 +2095,7 @@ public class MainActivity extends AppCompatActivity {
         root.addView(nordicDivider());
         root.addView(nordicMenuRow(isPersian ? "⬇ بازیابی از فایل بکاپ" : "Restore from backup file",
                 isPersian ? "فایل .opwb — کاملاً آفلاین" : "a .opwb file — fully offline",
-                v -> { sheet.dismiss(); openBackupLauncher.launch(new String[]{"*/*"}); }));
+                v -> { sheet.dismiss(); isLaunchingFilePicker = true; openBackupLauncher.launch(new String[]{"*/*"}); }));
         sheet.show();
     }
 
@@ -2786,7 +2777,7 @@ public class MainActivity extends AppCompatActivity {
                     dialog.dismiss();
                     try {
                         // انتخاب‌گر فایل سیستمی — محلی و بدون شبکه؛ کاربر خودش Downloads را انتخاب می‌کند
-                        saveBackupLauncher.launch(fileName);
+                        isLaunchingFilePicker = true; saveBackupLauncher.launch(fileName);
                     } catch (Exception e) {
                         pendingBackupBytes = null;
                         busyButton.setEnabled(true);
