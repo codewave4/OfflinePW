@@ -1072,6 +1072,19 @@ public class MainActivity extends AppCompatActivity {
         }
 
         loadVaultData(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
+
+        // مدیریت فشردن دکمه بازگشت در صفحه‌ی اصلی: پاک‌سازی امن و خروج کامل از اپلیکیشن
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                // اگر دیالوگ افزودن/ویرایش باز باشد، دیالوگ را می‌بندیم
+                if (currentAddDialog != null && currentAddDialog.isShowing()) {
+                    currentAddDialog.dismiss();
+                    return;
+                }
+                secureExitApp();
+            }
+        });
     }
 
     @Override
@@ -1137,6 +1150,28 @@ public class MainActivity extends AppCompatActivity {
      * کلید از حافظه پاک، کانکشن دیتابیس بسته، لیست (رکوردهای decrypt‌شده) از
      * حافظه تخلیه و کاربر به صفحه‌ی احراز هویت برمی‌گردد.
      */
+    /**
+     * خروج امن و کامل از اپلیکیشن هنگام زدن دکمه Back در صفحه‌ی اصلی.
+     * کل نشست و داده‌های حافظه پاک، دیتابیس بسته و کل Task خارج می‌شود.
+     */
+    private void secureExitApp() {
+        VaultSession.clear();
+        if (adapter != null) adapter.setItems(new ArrayList<>());
+        archivedItems = new ArrayList<>();
+        lastCopiedText = null;
+        revealedTotpItemIds.clear();
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("", ""));
+        } catch (Exception ignored) {
+        }
+        try {
+            dbHelper.close();
+        } catch (Exception ignored) {
+        }
+        finishAffinity();
+    }
+
     private void lockVaultNow() {
         if (isFinishing() || isChangingConfigurations()) return;
         VaultSession.clear();
