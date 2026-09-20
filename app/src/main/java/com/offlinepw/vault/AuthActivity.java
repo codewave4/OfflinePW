@@ -26,6 +26,8 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.AEADBadTagException;
+import java.security.GeneralSecurityException;
 
 public class AuthActivity extends AppCompatActivity {
     private static final int MIN_PASSWORD_LENGTH = 10;
@@ -422,6 +424,8 @@ public class AuthActivity extends AppCompatActivity {
         new Thread(() -> {
             SecretKey unlocked = null;
             boolean decoyHit = false;
+            boolean isWrongPassword = false;
+            boolean isTransientError = false;
             try {
                 String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
                 String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
@@ -431,21 +435,43 @@ public class AuthActivity extends AppCompatActivity {
                 byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
                 SecretKey kek = deriveKek(password, salt);
                 unlocked = unwrapDek(wrappedDek, kek);
+            } catch (javax.crypto.BadPaddingException badTagEx) {
+                // رمز اصلی اشتباه بود (عدم تطابق برچسب تایید اصالت AES-GCM)
+                isWrongPassword = true;
             } catch (Throwable primaryFail) {
-                // رمز اصلی نشد — همین ورودی روی ولت فریبنده هم امتحان می‌شود. اگر
-                // تنظیم نشده باشد (فایلش نیست) شکست آنی و بی‌صداست؛ پیام و
-                // زمان‌بندی قابل تشخیص از «حالت بدون فریبنده» نیست.
-                // Throwable نه Exception: خطاهای نادرِ native/prefs هم به «رمز
-                // اشتباه» تبدیل می‌شوند، نه force-close.
-                try { unlocked = tryDecoyUnlock(password); } catch (Throwable t) { unlocked = null; }
-                decoyHit = unlocked != null;
+                // خطای غیر از رمز اشتباه (مثل خطای حافظه OOM یا خطای غیرمنتظره سیستمی)
+                isTransientError = true;
             }
+
             if (unlocked == null) {
+                // امتحان روی ولت فریبنده
+                try {
+                    unlocked = tryDecoyUnlock(password);
+                } catch (Throwable t) {
+                    unlocked = null;
+                }
+                decoyHit = unlocked != null;
+                if (decoyHit) {
+                    isWrongPassword = false;
+                    isTransientError = false;
+                }
+            }
+
+            if (unlocked == null) {
+                final boolean wrongPassword = isWrongPassword;
+                final boolean transientError = isTransientError;
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) return;
                     setUnlockButtonBusy(false);
                     if (etMasterPassword != null) etMasterPassword.setText("");
-                    registerFailedAttempt();
+                    if (transientError && !wrongPassword) {
+                        Toast.makeText(this,
+                                isPersian ? "خطای موقت در پردازش امنیتی؛ لطفاً دوباره تلاش کنید."
+                                          : "Temporary security processing error; please try again.",
+                                Toast.LENGTH_SHORT).show();
+                    } else {
+                        registerFailedAttempt();
+                    }
                 });
                 return;
             }
