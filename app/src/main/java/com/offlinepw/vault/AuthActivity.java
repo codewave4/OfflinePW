@@ -585,6 +585,10 @@ public class AuthActivity extends AppCompatActivity {
      *  - flag زبان و تم کاربر دوباره ذخیره می‌شود تا بعد از ساخت رمز جدید، UI به‌طور
      *    ناگهانی به انگلیسی/تیم پیش‌فرض برنگردد.
      */
+    private static int dp(android.content.Context c, float v) {
+        return Math.round(v * c.getResources().getDisplayMetrics().density);
+    }
+
     private void wipeVaultAndShowMessage() {
         // زبان و تم کاربر را قبل از پاکشدن تنظیمات نگه می‌داریم.
         final boolean langPersian = isPersian;
@@ -667,7 +671,7 @@ public class AuthActivity extends AppCompatActivity {
 
         android.widget.LinearLayout root = new android.widget.LinearLayout(this);
         root.setOrientation(android.widget.LinearLayout.VERTICAL);
-        root.setPadding(48, 40, 48, 48);
+        root.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 24));
         root.setBackgroundColor(android.graphics.Color.parseColor("#18181B"));
 
         android.widget.TextView tvTitle = new android.widget.TextView(this);
@@ -679,9 +683,9 @@ public class AuthActivity extends AppCompatActivity {
 
         android.view.View divider = new android.view.View(this);
         android.widget.LinearLayout.LayoutParams dividerLp = new android.widget.LinearLayout.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT, 2);
-        dividerLp.topMargin = 16;
-        dividerLp.bottomMargin = 16;
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 1));
+        dividerLp.topMargin = dp(this, 12);
+        dividerLp.bottomMargin = dp(this, 12);
         divider.setLayoutParams(dividerLp);
         divider.setBackgroundColor(android.graphics.Color.parseColor("#27272A"));
         root.addView(divider);
@@ -707,7 +711,7 @@ public class AuthActivity extends AppCompatActivity {
         btnCreateNew.setText(langPersian ? "ساخت رمز جدید" : "Create New Password");
         android.widget.LinearLayout.LayoutParams btnLp = new android.widget.LinearLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnLp.topMargin = 32;
+        btnLp.topMargin = dp(this, 20);
         btnCreateNew.setLayoutParams(btnLp);
         btnCreateNew.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#27272A")));
         btnCreateNew.setTextColor(android.graphics.Color.parseColor("#F4F4F5"));

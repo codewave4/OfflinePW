@@ -479,6 +479,10 @@ public class MainActivity extends AppCompatActivity {
         void onItemClick(VaultItem item);
     }
 
+    static int dp(Context c, float v) {
+        return Math.round(v * c.getResources().getDisplayMetrics().density);
+    }
+
     private final java.util.Map<String, Long> revealedUntil = new java.util.concurrent.ConcurrentHashMap<>();
 
     public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> {
@@ -591,17 +595,17 @@ public class MainActivity extends AppCompatActivity {
             MaterialCardView card = new MaterialCardView(ctx);
             RecyclerView.LayoutParams cardLp = new RecyclerView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            cardLp.setMargins(24, 12, 24, 12);
+            cardLp.setMargins(dp(ctx, 12), dp(ctx, 6), dp(ctx, 12), dp(ctx, 6));
             card.setLayoutParams(cardLp);
-            card.setRadius(24f);
-            card.setStrokeWidth(1);
+            card.setRadius(dp(ctx, 12));
+            card.setStrokeWidth(dp(ctx, 1));
             card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
             card.setCardBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
-            card.setCardElevation(2f);
+            card.setCardElevation(dp(ctx, 1));
 
             LinearLayout root = new LinearLayout(ctx);
             root.setOrientation(LinearLayout.VERTICAL);
-            root.setPadding(32, 28, 32, 28);
+            root.setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 14));
 
             LinearLayout header = new LinearLayout(ctx);
             header.setOrientation(LinearLayout.HORIZONTAL);
@@ -611,8 +615,8 @@ public class MainActivity extends AppCompatActivity {
             ImageView ivPin = new ImageView(ctx);
             ivPin.setImageResource(R.drawable.ic_pin);
             ivPin.setColorFilter(Color.parseColor("#F59E0B"));
-            LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(20, 20);
-            pinLp.setMarginEnd(8);
+            LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(dp(ctx, 16), dp(ctx, 16));
+            pinLp.setMarginEnd(dp(ctx, 6));
             ivPin.setLayoutParams(pinLp);
             ivPin.setVisibility(View.GONE);
             header.addView(ivPin);
@@ -629,7 +633,7 @@ public class MainActivity extends AppCompatActivity {
             tvCategory.setTypeface(null, Typeface.BOLD);
             tvCategory.setTextColor(Color.parseColor("#3B82F6"));
             tvCategory.setBackgroundColor(Color.parseColor(isDarkMode ? "#1E293B" : "#EFF6FF"));
-            tvCategory.setPadding(18, 6, 18, 6);
+            tvCategory.setPadding(dp(ctx, 10), dp(ctx, 4), dp(ctx, 10), dp(ctx, 4));
             header.addView(tvCategory);
 
             root.addView(header);
@@ -637,21 +641,21 @@ public class MainActivity extends AppCompatActivity {
             TextView tvUsername = new TextView(ctx);
             tvUsername.setTextSize(14f);
             tvUsername.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
-            tvUsername.setPadding(0, 12, 0, 0);
+            tvUsername.setPadding(0, dp(ctx, 6), 0, 0);
             root.addView(tvUsername);
 
             TextView tvMasked = new TextView(ctx);
             tvMasked.setTextSize(13f);
             tvMasked.setTextColor(Color.parseColor("#10B981"));
             tvMasked.setText("•••• •••• •••• ••••");
-            tvMasked.setPadding(0, 6, 0, 0);
+            tvMasked.setPadding(0, dp(ctx, 4), 0, 0);
             root.addView(tvMasked);
 
             // ردیف TOTP: کد + حلقه‌ی شمارش معکوسِ نوردیک
             LinearLayout totpRow = new LinearLayout(ctx);
             totpRow.setOrientation(LinearLayout.HORIZONTAL);
             totpRow.setGravity(Gravity.CENTER_VERTICAL);
-            totpRow.setPadding(0, 10, 0, 0);
+            totpRow.setPadding(0, dp(ctx, 6), 0, 0);
             totpRow.setVisibility(View.GONE);
 
             TextView tvTotpDisplay = new TextView(ctx);
@@ -671,7 +675,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tvUpdated = new TextView(ctx);
             tvUpdated.setTextSize(11f);
             tvUpdated.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
-            tvUpdated.setPadding(0, 8, 0, 0);
+            tvUpdated.setPadding(0, dp(ctx, 4), 0, 0);
             tvUpdated.setVisibility(View.GONE);
             root.addView(tvUpdated);
 
@@ -1363,7 +1367,7 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(48, 40, 48, 48);
+        root.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 24));
         root.setBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
 
         TextView tvHeaderTitle = new TextView(this);
@@ -1374,9 +1378,9 @@ public class MainActivity extends AppCompatActivity {
         root.addView(tvHeaderTitle);
 
         View divider = new View(this);
-        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2);
-        dividerLp.topMargin = 16;
-        dividerLp.bottomMargin = 4;
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(this, 1));
+        dividerLp.topMargin = dp(this, 12);
+        dividerLp.bottomMargin = dp(this, 4);
         divider.setLayoutParams(dividerLp);
         divider.setBackgroundColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
         root.addView(divider);
@@ -1404,7 +1408,7 @@ public class MainActivity extends AppCompatActivity {
         for (String[] entry : items) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(0, 20, 0, 0);
+            row.setPadding(0, dp(this, 12), 0, 0);
 
             TextView tvItemTitle = new TextView(this);
             tvItemTitle.setText(entry[0]);
@@ -1418,7 +1422,7 @@ public class MainActivity extends AppCompatActivity {
             tvItemDesc.setTextSize(13f);
             tvItemDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
             LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            descLp.topMargin = 4;
+            descLp.topMargin = dp(this, 4);
             tvItemDesc.setLayoutParams(descLp);
             row.addView(tvItemDesc);
 
@@ -1428,7 +1432,7 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton btnClose = new MaterialButton(this);
         btnClose.setText(isPersian ? "تأیید" : "Close");
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        closeLp.topMargin = 32;
+        closeLp.topMargin = dp(this, 20);
         btnClose.setLayoutParams(closeLp);
         btnClose.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#27272A")));
         btnClose.setTextColor(Color.parseColor("#F4F4F5"));
@@ -1607,7 +1611,7 @@ public class MainActivity extends AppCompatActivity {
         BottomSheetDialog sheet = new BottomSheetDialog(this);
 
         LinearLayout root = nordicSheetRoot();
-        root.setPadding(40, 32, 40, 48);
+        root.setPadding(dp(this, 20), dp(this, 16), dp(this, 20), dp(this, 24));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -1625,7 +1629,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tvPinBadge = new TextView(this);
             tvPinBadge.setText("📌");
             tvPinBadge.setTextSize(15f);
-            tvPinBadge.setPadding(0, 0, 12, 0);
+            tvPinBadge.setPadding(0, 0, dp(this, 8), 0);
             header.addView(tvPinBadge);
         }
 
@@ -1641,7 +1645,7 @@ public class MainActivity extends AppCompatActivity {
         badgeBg.setCornerRadius(8 * getResources().getDisplayMetrics().density);
         badgeBg.setStroke((int) (1 * getResources().getDisplayMetrics().density), Color.parseColor("#44F59E0B"));
         tvCategoryBadge.setBackground(badgeBg);
-        tvCategoryBadge.setPadding(18, 8, 18, 8);
+        tvCategoryBadge.setPadding(dp(this, 10), dp(this, 4), dp(this, 10), dp(this, 4));
         header.addView(tvCategoryBadge);
         root.addView(header);
 
@@ -1651,15 +1655,15 @@ public class MainActivity extends AppCompatActivity {
             tvUpdatedLine.setText((isPersian ? "آخرین به‌روزرسانی: " : "last updated: ") + formatVaultDate(ref));
             tvUpdatedLine.setTextSize(11f);
             tvUpdatedLine.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-            tvUpdatedLine.setPadding(0, 10, 0, 0);
+            tvUpdatedLine.setPadding(0, dp(this, 6), 0, 0);
             root.addView(tvUpdatedLine);
         }
 
         View divider = new View(this);
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 1);
-        dividerLp.topMargin = 18;
-        dividerLp.bottomMargin = 6;
+        dividerLp.topMargin = dp(this, 12);
+        dividerLp.bottomMargin = dp(this, 4);
         divider.setLayoutParams(dividerLp);
         divider.setBackgroundColor(ContextCompat.getColor(this, R.color.nordic_border));
         root.addView(divider);
@@ -1688,7 +1692,7 @@ public class MainActivity extends AppCompatActivity {
         actionsRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams actLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        actLp.topMargin = 22;
+        actLp.topMargin = dp(this, 16);
         actionsRow.setLayoutParams(actLp);
 
         MaterialButton btnEdit = new MaterialButton(this);
@@ -1696,12 +1700,12 @@ public class MainActivity extends AppCompatActivity {
         btnEdit.setTextSize(12.5f);
         btnEdit.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
         LinearLayout.LayoutParams editLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        editLp.setMarginEnd(12);
+        editLp.setMarginEnd(dp(this, 8));
         btnEdit.setLayoutParams(editLp);
         btnEdit.setBackgroundTintList(ColorStateList.valueOf(
                 ContextCompat.getColor(this, R.color.nordic_primary_btn_bg)));
         btnEdit.setTextColor(ContextCompat.getColor(this, R.color.nordic_primary_btn_text));
-        btnEdit.setCornerRadius(12);
+        btnEdit.setCornerRadius(dp(this, 12));
         btnEdit.setOnClickListener(v -> { sheet.dismiss(); showAddDialog(item); });
         actionsRow.addView(btnEdit);
 
@@ -1712,9 +1716,9 @@ public class MainActivity extends AppCompatActivity {
         btnArchive.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         btnArchive.setBackgroundColor(Color.TRANSPARENT);
         btnArchive.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#F59E0B")));
-        btnArchive.setStrokeWidth(2);
+        btnArchive.setStrokeWidth(dp(this, 1.5f));
         btnArchive.setTextColor(Color.parseColor("#F59E0B"));
-        btnArchive.setCornerRadius(12);
+        btnArchive.setCornerRadius(dp(this, 12));
         btnArchive.setOnClickListener(v -> {
             sheet.dismiss();
             styleNordicDialog(new AlertDialog.Builder(this)
@@ -1754,10 +1758,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackgroundResource(R.drawable.bg_nordic_field);
-        box.setPadding(28, 18, 16, 18);
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 8), dp(this, 10));
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        boxLp.topMargin = 14;
+        boxLp.topMargin = dp(this, 8);
         box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
@@ -1771,7 +1775,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout valueRow = new LinearLayout(this);
         valueRow.setOrientation(LinearLayout.HORIZONTAL);
         valueRow.setGravity(Gravity.CENTER_VERTICAL);
-        valueRow.setPadding(0, 6, 0, 0);
+        valueRow.setPadding(0, dp(this, 4), 0, 0);
 
         TextView tvValue = new TextView(this);
         tvValue.setTextSize(15f);
@@ -1790,9 +1794,10 @@ public class MainActivity extends AppCompatActivity {
             ImageView ivEye = new ImageView(this);
             ivEye.setImageResource(R.drawable.ic_visibility_off);
             ivEye.setColorFilter(iconColor);
-            LinearLayout.LayoutParams eyeLp = new LinearLayout.LayoutParams(52, 52);
-            eyeLp.setMarginStart(12);
+            LinearLayout.LayoutParams eyeLp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 44));
+            eyeLp.setMarginStart(dp(this, 6));
             ivEye.setLayoutParams(eyeLp);
+            ivEye.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
             ivEye.setOnClickListener(v -> {
                 revealed[0] = !revealed[0];
                 updateText.run();
@@ -1804,9 +1809,10 @@ public class MainActivity extends AppCompatActivity {
         ImageView ivCopy = new ImageView(this);
         ivCopy.setImageResource(R.drawable.ic_content_copy);
         ivCopy.setColorFilter(iconColor);
-        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(52, 52);
-        copyLp.setMarginStart(12);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 44));
+        copyLp.setMarginStart(dp(this, 6));
         ivCopy.setLayoutParams(copyLp);
+        ivCopy.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
         ivCopy.setOnClickListener(v -> {
             copyToClipboard(label, value);
             logActivity(copyKind, item.getId());
@@ -1821,10 +1827,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackgroundResource(R.drawable.bg_nordic_field);
-        box.setPadding(28, 18, 16, 18);
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 8), dp(this, 10));
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        boxLp.topMargin = 14;
+        boxLp.topMargin = dp(this, 8);
         box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
@@ -1838,7 +1844,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout valueRow = new LinearLayout(this);
         valueRow.setOrientation(LinearLayout.HORIZONTAL);
         valueRow.setGravity(Gravity.CENTER_VERTICAL);
-        valueRow.setPadding(0, 6, 0, 0);
+        valueRow.setPadding(0, dp(this, 4), 0, 0);
 
         TextView tvValue = new TextView(this);
         tvValue.setTextSize(17f);
@@ -1872,10 +1878,10 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setBackgroundResource(R.drawable.bg_nordic_field);
-        box.setPadding(28, 18, 16, 18);
+        box.setPadding(dp(this, 14), dp(this, 10), dp(this, 8), dp(this, 10));
         LinearLayout.LayoutParams boxLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        boxLp.topMargin = 14;
+        boxLp.topMargin = dp(this, 8);
         box.setLayoutParams(boxLp);
 
         TextView tvLabel = new TextView(this);
@@ -1896,13 +1902,13 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout valueRow = new LinearLayout(this);
             valueRow.setOrientation(LinearLayout.HORIZONTAL);
             valueRow.setGravity(Gravity.CENTER_VERTICAL);
-            valueRow.setPadding(0, 6, 0, 0);
+            valueRow.setPadding(0, dp(this, 4), 0, 0);
 
             ImageView ivGlobe = new ImageView(this);
             ivGlobe.setImageResource(R.drawable.ic_public);
             ivGlobe.setColorFilter(Color.parseColor("#3B82F6"));
-            LinearLayout.LayoutParams globeLp = new LinearLayout.LayoutParams(40, 40);
-            globeLp.setMarginEnd(12);
+            LinearLayout.LayoutParams globeLp = new LinearLayout.LayoutParams(dp(this, 24), dp(this, 24));
+            globeLp.setMarginEnd(dp(this, 8));
             ivGlobe.setLayoutParams(globeLp);
             valueRow.addView(ivGlobe);
 
@@ -1920,9 +1926,10 @@ public class MainActivity extends AppCompatActivity {
             ImageView ivCopy = new ImageView(this);
             ivCopy.setImageResource(R.drawable.ic_content_copy);
             ivCopy.setColorFilter(iconColor);
-            LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(44, 44);
-            copyLp.setMarginStart(12);
+            LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(dp(this, 44), dp(this, 44));
+            copyLp.setMarginStart(dp(this, 6));
             ivCopy.setLayoutParams(copyLp);
+            ivCopy.setPadding(dp(this, 10), dp(this, 10), dp(this, 10), dp(this, 10));
             ivCopy.setOnClickListener(v -> {
                 copyToClipboard(isPersian ? "وبسایت" : "Website", url);
                 logActivity("COPY_WEBSITE", item.getId());
@@ -2113,7 +2120,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout nordicSheetRoot() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(40, 36, 40, 56);
+        root.setPadding(dp(this, 20), dp(this, 18), dp(this, 20), dp(this, 28));
         return root;
     }
 
@@ -2126,7 +2133,7 @@ public class MainActivity extends AppCompatActivity {
         tv.setLetterSpacing(0.04f);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = 24;
+        lp.bottomMargin = dp(this, 14);
         tv.setLayoutParams(lp);
         return tv;
     }
@@ -2138,7 +2145,7 @@ public class MainActivity extends AppCompatActivity {
         row.setClickable(true);
         row.setFocusable(true);
         row.setBackgroundResource(android.R.drawable.list_selector_background);
-        row.setPadding(24, 30, 24, 30);
+        row.setPadding(dp(this, 14), dp(this, 14), dp(this, 14), dp(this, 14));
 
         LinearLayout texts = new LinearLayout(this);
         texts.setOrientation(LinearLayout.VERTICAL);
@@ -2153,7 +2160,7 @@ public class MainActivity extends AppCompatActivity {
             tvSub.setText(sub);
             tvSub.setTextSize(11f);
             tvSub.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-            tvSub.setPadding(0, 6, 0, 0);
+            tvSub.setPadding(0, dp(this, 4), 0, 0);
             texts.addView(tvSub);
         }
         row.addView(texts, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
@@ -2241,7 +2248,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout root = nordicSheetRoot();
         root.addView(nordicSheetTitle(isPersian ? "🗃 بایگانی" : "Archive"));
         LinearLayout.LayoutParams tParams = (LinearLayout.LayoutParams) root.getChildAt(0).getLayoutParams();
-        tParams.bottomMargin = 8;
+        tParams.bottomMargin = dp(this, 6);
         root.getChildAt(0).setLayoutParams(tParams);
 
         TextView tvNote = new TextView(this);
@@ -2250,14 +2257,14 @@ public class MainActivity extends AppCompatActivity {
                 : "Archived items are kept for 30 days, then purged automatically.");
         tvNote.setTextSize(11.5f);
         tvNote.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-        tvNote.setPadding(0, 0, 0, 20);
+        tvNote.setPadding(0, 0, 0, dp(this, 10));
         root.addView(tvNote);
 
         if (archivedItems.isEmpty()) {
             TextView tvEmpty = new TextView(this);
             tvEmpty.setText(isPersian ? "بایگانی خالی است." : "Archive is empty.");
             tvEmpty.setTextSize(14f);
-            tvEmpty.setPadding(0, 16, 0, 24);
+            tvEmpty.setPadding(0, dp(this, 8), 0, dp(this, 12));
             tvEmpty.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
             root.addView(tvEmpty);
         } else {
@@ -2265,10 +2272,10 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout rowCard = new LinearLayout(this);
                 rowCard.setOrientation(LinearLayout.VERTICAL);
                 rowCard.setBackgroundResource(R.drawable.bg_nordic_field);
-                rowCard.setPadding(28, 22, 28, 22);
+                rowCard.setPadding(dp(this, 14), dp(this, 10), dp(this, 14), dp(this, 10));
                 LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                rcLp.bottomMargin = 16;
+                rcLp.bottomMargin = dp(this, 10);
                 rowCard.setLayoutParams(rcLp);
 
                 TextView tvT = new TextView(this);
@@ -2285,7 +2292,7 @@ public class MainActivity extends AppCompatActivity {
                     tvD.setText((isPersian ? "بایگانی‌شده: " : "archived: ") + formatVaultDate(ref));
                     tvD.setTextSize(10.5f);
                     tvD.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-                    tvD.setPadding(0, 6, 0, 12);
+                    tvD.setPadding(0, dp(this, 4), 0, dp(this, 8));
                     rowCard.addView(tvD);
                 }
 
@@ -2296,12 +2303,12 @@ public class MainActivity extends AppCompatActivity {
                 btnRestore.setText(isPersian ? "بازگردانی" : "Restore");
                 btnRestore.setTextSize(11.5f);
                 LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                rLp.setMarginEnd(10);
+                rLp.setMarginEnd(dp(this, 8));
                 btnRestore.setLayoutParams(rLp);
                 btnRestore.setBackgroundTintList(ColorStateList.valueOf(
                         ContextCompat.getColor(this, R.color.nordic_primary_btn_bg)));
                 btnRestore.setTextColor(ContextCompat.getColor(this, R.color.nordic_primary_btn_text));
-                btnRestore.setCornerRadius(12);
+                btnRestore.setCornerRadius(dp(this, 12));
 
                 MaterialButton btnPurge = new MaterialButton(this);
                 btnPurge.setText(isPersian ? "حذف قطعی" : "Delete forever");
@@ -2309,9 +2316,9 @@ public class MainActivity extends AppCompatActivity {
                 btnPurge.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 btnPurge.setBackgroundColor(Color.TRANSPARENT);
                 btnPurge.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#EF4444")));
-                btnPurge.setStrokeWidth(2);
+                btnPurge.setStrokeWidth(dp(this, 1.5f));
                 btnPurge.setTextColor(Color.parseColor("#EF4444"));
-                btnPurge.setCornerRadius(12);
+                btnPurge.setCornerRadius(dp(this, 12));
 
                 final String itemId = archived.getId();
                 btnRestore.setOnClickListener(v -> {
@@ -2374,7 +2381,7 @@ public class MainActivity extends AppCompatActivity {
     private void showActivityLogSheet() {
         LinearLayout root = nordicSheetRoot();
         root.addView(nordicSheetTitle(isPersian ? "📓 دفترچه فعالیت" : "Activity log"));
-        ((LinearLayout.LayoutParams) root.getChildAt(0).getLayoutParams()).bottomMargin = 8;
+        ((LinearLayout.LayoutParams) root.getChildAt(0).getLayoutParams()).bottomMargin = dp(this, 6);
 
         TextView tvNote = new TextView(this);
         tvNote.setText(isPersian
@@ -2382,7 +2389,7 @@ public class MainActivity extends AppCompatActivity {
                 : "Last 200 events, stored only in this device's encrypted database — never sent anywhere.");
         tvNote.setTextSize(11.5f);
         tvNote.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-        tvNote.setPadding(0, 0, 0, 20);
+        tvNote.setPadding(0, 0, 0, dp(this, 10));
         root.addView(tvNote);
 
         final BottomSheetDialog logSheet = new BottomSheetDialog(this);
@@ -2411,7 +2418,7 @@ public class MainActivity extends AppCompatActivity {
                     TextView tvEmpty = new TextView(this);
                     tvEmpty.setText(isPersian ? "فعلیتی ثبت نشده است." : "No activity recorded yet.");
                     tvEmpty.setTextSize(14f);
-                    tvEmpty.setPadding(0, 12, 0, 20);
+                    tvEmpty.setPadding(0, dp(this, 8), 0, dp(this, 12));
                     tvEmpty.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
                     root.addView(tvEmpty);
                 } else {
@@ -2433,7 +2440,7 @@ public class MainActivity extends AppCompatActivity {
                         tvWhen.setTextSize(10f);
                         tvWhen.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
                         row.addView(tvWhen);
-                        row.setPadding(0, 14, 0, 14);
+                        row.setPadding(0, dp(this, 8), 0, dp(this, 8));
                         root.addView(row);
                         if (shown < Math.min(60, entries.size())) root.addView(nordicDivider());
                     }
@@ -2442,7 +2449,7 @@ public class MainActivity extends AppCompatActivity {
                         tvMore.setText(isPersian ? ("… " + (entries.size() - 60) + " رویداد قدیمی‌تر")
                                                  : ("… " + (entries.size() - 60) + " older events"));
                         tvMore.setTextSize(11f);
-                        tvMore.setPadding(0, 12, 0, 0);
+                        tvMore.setPadding(0, dp(this, 8), 0, 0);
                         tvMore.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
                         root.addView(tvMore);
                     }
@@ -2452,14 +2459,14 @@ public class MainActivity extends AppCompatActivity {
                 btnClear.setTextSize(11.5f);
                 LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                cLp.topMargin = 20;
+                cLp.topMargin = dp(this, 14);
                 btnClear.setLayoutParams(cLp);
                 btnClear.setBackgroundColor(Color.TRANSPARENT);
                 btnClear.setStrokeColor(ColorStateList.valueOf(
                         ContextCompat.getColor(this, R.color.nordic_border)));
-                btnClear.setStrokeWidth(2);
+                btnClear.setStrokeWidth(dp(this, 1.5f));
                 btnClear.setTextColor(ContextCompat.getColor(this, R.color.nordic_text_secondary));
-                btnClear.setCornerRadius(12);
+                btnClear.setCornerRadius(dp(this, 12));
                 btnClear.setOnClickListener(v -> styleNordicDialog(new AlertDialog.Builder(this)
                         .setTitle(isPersian ? "پاک کردن دفترچه" : "Clear activity log")
                         .setMessage(isPersian ? "همه‌ی رویدادها حذف شوند؟" : "Delete all recorded events?")
@@ -2781,7 +2788,7 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 20, 24, 8);
+        root.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 8));
 
         TextView tvTitle = new TextView(this);
         tvTitle.setText(isPersian ? "رمز بکاپ" : "Backup Password");
@@ -2798,7 +2805,7 @@ public class MainActivity extends AppCompatActivity {
         tvDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        descLp.topMargin = 8;
+        descLp.topMargin = dp(this, 6);
         tvDesc.setLayoutParams(descLp);
         root.addView(tvDesc);
 
@@ -2810,7 +2817,7 @@ public class MainActivity extends AppCompatActivity {
         tilPass.addView(etPass);
         LinearLayout.LayoutParams tilLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tilLp.topMargin = 16;
+        tilLp.topMargin = dp(this, 10);
         tilPass.setLayoutParams(tilLp);
         root.addView(tilPass);
 
@@ -2822,7 +2829,7 @@ public class MainActivity extends AppCompatActivity {
         tilPassConfirm.addView(etPassConfirm);
         LinearLayout.LayoutParams tilConfirmLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tilConfirmLp.topMargin = 12;
+        tilConfirmLp.topMargin = dp(this, 8);
         tilPassConfirm.setLayoutParams(tilConfirmLp);
         root.addView(tilPassConfirm);
 
@@ -2832,7 +2839,7 @@ public class MainActivity extends AppCompatActivity {
         btnCreate.setTextColor(Color.parseColor("#09090B"));
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnLp.topMargin = 16;
+        btnLp.topMargin = dp(this, 12);
         btnCreate.setLayoutParams(btnLp);
         root.addView(btnCreate);
 
@@ -2956,7 +2963,7 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24, 20, 24, 8);
+        root.setPadding(dp(this, 16), dp(this, 14), dp(this, 16), dp(this, 8));
 
         TextView tvTitle = new TextView(this);
         tvTitle.setText(isPersian ? "بازیابی از بکاپ" : "Restore from Backup");
@@ -2973,7 +2980,7 @@ public class MainActivity extends AppCompatActivity {
         tvDesc.setTextColor(Color.parseColor(isDarkMode ? "#A1A1AA" : "#71717A"));
         LinearLayout.LayoutParams descLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        descLp.topMargin = 8;
+        descLp.topMargin = dp(this, 6);
         tvDesc.setLayoutParams(descLp);
         root.addView(tvDesc);
 
@@ -2985,7 +2992,7 @@ public class MainActivity extends AppCompatActivity {
         tilPass.addView(etPass);
         LinearLayout.LayoutParams tilLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tilLp.topMargin = 16;
+        tilLp.topMargin = dp(this, 10);
         tilPass.setLayoutParams(tilLp);
         root.addView(tilPass);
 
@@ -2995,7 +3002,7 @@ public class MainActivity extends AppCompatActivity {
         btnRestore.setTextColor(Color.parseColor("#09090B"));
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnLp.topMargin = 16;
+        btnLp.topMargin = dp(this, 12);
         btnRestore.setLayoutParams(btnLp);
         root.addView(btnRestore);
 
