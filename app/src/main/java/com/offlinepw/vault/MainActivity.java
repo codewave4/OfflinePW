@@ -667,17 +667,6 @@ public class MainActivity extends AppCompatActivity {
                     (int) (36 * ctx.getResources().getDisplayMetrics().density)));
             root.addView(totpRow);
 
-            // راهنمای اسوایپ به بالا (بایگانی) — فقط حین کشیدن عمودی دیده می‌شود
-            TextView tvSwipeHint = new TextView(ctx);
-            tvSwipeHint.setText(isPersian ? "↑ رها کن تا به بایگانی برود (تا ۳۰ روز قابل بازگردانی)"
-                                          : "↑ release to archive (restorable for 30 days)");
-            tvSwipeHint.setTextSize(10.5f);
-            tvSwipeHint.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
-            tvSwipeHint.setTextColor(Color.parseColor("#F59E0B"));
-            tvSwipeHint.setPadding(0, 8, 0, 0);
-            tvSwipeHint.setVisibility(View.GONE);
-            root.addView(tvSwipeHint);
-
             // خط «آخرین به‌روزرسانی» — پایین کارت، فقط وقتی تاریخ معلوم باشد
             TextView tvUpdated = new TextView(ctx);
             tvUpdated.setTextSize(11f);
@@ -687,7 +676,7 @@ public class MainActivity extends AppCompatActivity {
             root.addView(tvUpdated);
 
             card.addView(root);
-            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, totpRow, totpRing, tvSwipeHint);
+            return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, totpRow, totpRing);
         }
 
         @Override
@@ -761,13 +750,13 @@ public class MainActivity extends AppCompatActivity {
         public class ViewHolder extends RecyclerView.ViewHolder {
             MaterialCardView card;
             ImageView ivPin;
-            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, tvSwipeHint;
+            TextView tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated;
             LinearLayout totpRow;
             TotpRingView totpRing;
 
             public ViewHolder(@NonNull View itemView, ImageView pin, TextView t, TextView c, TextView u,
                               TextView m, TextView totp, TextView updated, LinearLayout row,
-                              TotpRingView ring, TextView swipeHint) {
+                              TotpRingView ring) {
                 super(itemView);
                 card = (MaterialCardView) itemView;
                 ivPin = pin;
@@ -779,7 +768,6 @@ public class MainActivity extends AppCompatActivity {
                 tvUpdated = updated;
                 totpRow = row;
                 totpRing = ring;
-                tvSwipeHint = swipeHint;
             }
         }
 
@@ -831,10 +819,8 @@ public class MainActivity extends AppCompatActivity {
     // --- اسوایپ پین/آن‌پین ---
     private final Paint swipePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Drawable swipeIconPin;   // lazy-load با tint سفید
-    private Drawable swipeIconArchive;
     private static final int SWIPE_PIN_COLOR = 0xFFF59E0B;    // کهربایی: پین (اسوایپ به چپ)
     private static final int SWIPE_UNPIN_COLOR = 0xFFEF4444;  // قرمز: آن‌پین (اسوایپ به راست)
-    private static final int SWIPE_ARCHIVE_COLOR = 0xFF3F3F46; // خنثی: بایگانی (اسوایپ به بالا)
 
     // --- آرشیو و دفترچه فعالیت ---
     private List<VaultItem> archivedItems = new ArrayList<>();
@@ -1021,47 +1007,20 @@ public class MainActivity extends AppCompatActivity {
 
                 @Override
                 public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder vh) {
-                    // افقی = پین/آن‌پین؛ عمودی رو به بالا = بایگانی (جایگزین حذف آنی)
-                    return makeMovementFlags(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT | ItemTouchHelper.UP);
+                    // افقی = پین/آن‌پین
+                    return makeMovementFlags(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT);
                 }
 
                 @Override
                 public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                    if (direction == ItemTouchHelper.UP) handleArchiveSwipe(viewHolder);
-                    else handlePinSwipe(viewHolder, direction);
-                }
-
-                @Override
-                public void onSelectedChanged(@androidx.annotation.Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
-                    super.onSelectedChanged(viewHolder, actionState);
-                    if (actionState != ItemTouchHelper.ACTION_STATE_SWIPE && viewHolder instanceof VaultAdapter.ViewHolder) {
-                        ((VaultAdapter.ViewHolder) viewHolder).tvSwipeHint.setVisibility(View.GONE);
-                    }
-                }
-
-                @Override
-                public void clearView(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
-                    super.clearView(recyclerView, viewHolder);
-                    if (viewHolder instanceof VaultAdapter.ViewHolder) {
-                        ((VaultAdapter.ViewHolder) viewHolder).tvSwipeHint.setVisibility(View.GONE);
-                    }
+                    handlePinSwipe(viewHolder, direction);
                 }
 
                 @Override
                 public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView rv,
                                         @NonNull RecyclerView.ViewHolder holder,
                                         float dX, float dY, int actionState, boolean isCurrentlyActive) {
-                    if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && Math.abs(dY) > Math.abs(dX)) {
-                        // کشیدن رو به بالا: رونمایه بایگانی + راهنمای داخل ردیف
-                        if (holder instanceof VaultAdapter.ViewHolder) {
-                            TextView hint = ((VaultAdapter.ViewHolder) holder).tvSwipeHint;
-                            int want = (dY < -10f) ? View.VISIBLE : View.GONE;
-                            if (hint.getVisibility() != want) hint.setVisibility(want);
-                        }
-                        drawArchiveOverlay(c, holder, dY);
-                    } else {
-                        drawSwipeBackground(c, holder, dX, actionState);
-                    }
+                    drawSwipeBackground(c, holder, dX, actionState);
                     super.onChildDraw(c, rv, holder, dX, dY, actionState, isCurrentlyActive);
                 }
             });
@@ -2758,78 +2717,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
         return swipeIconPin;
-    }
-
-    // ================= بایگانی (اسوایپ به بالا، جایگزین حذف آنی) =================
-
-    private void handleArchiveSwipe(RecyclerView.ViewHolder viewHolder) {
-        int pos = viewHolder.getAdapterPosition();
-        if (pos == RecyclerView.NO_POSITION || adapter == null) return;
-        VaultItem item = adapter.getItem(pos);
-        if (item == null) {
-            adapter.notifyItemChanged(pos);
-            return;
-        }
-        adapter.notifyItemChanged(pos); // ردیف را همان لحظه برگردان تا با خطا گم نشود
-        final String itemId = item.getId();
-        new Thread(() -> {
-            try {
-                dbHelper.setArchived(itemId, true);
-                dbHelper.logActivity("ARCHIVE", itemId);
-                runOnUiThread(() -> {
-                    if (isFinishing() || isChangingConfigurations()) return;
-                    loadVaultData();
-                    Toast.makeText(this, isPersian
-                            ? "«" + item.getTitle() + "» به بایگانی رفت — تا ۳۰ روز قابل بازگردانی"
-                            : "\"" + item.getTitle() + "\" archived — restorable for 30 days",
-                            Toast.LENGTH_LONG).show();
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> Toast.makeText(this,
-                        isPersian ? "بایگانی ناموفق بود؛ دوباره تلاش کنید" : "Archive failed; try again",
-                        Toast.LENGTH_SHORT).show());
-            }
-        }).start();
-    }
-
-    /** رونمایه بایگانی هنگام کشیدن ردیف به بالا — نوار خنثی با آیکن و متن. */
-    private void drawArchiveOverlay(Canvas canvas, RecyclerView.ViewHolder holder, float dY) {
-        View itemView = holder.itemView;
-        float top = itemView.getTop();
-        float bottom = itemView.getBottom();
-        float reveal = Math.min(-dY, bottom - top);
-        if (reveal < 4f) return;
-        float radius = 24f;
-        swipePaint.setColor(isDarkMode ? SWIPE_ARCHIVE_COLOR : 0xFFD4D4D8);
-        canvas.drawRoundRect(itemView.getLeft(), bottom - reveal, itemView.getRight(), bottom, radius, radius, swipePaint);
-
-        String label = isPersian ? "🗃 بایگانی" : "archive";
-        swipePaint.setTextSize(11 * getResources().getDisplayMetrics().scaledDensity);
-        float textW = swipePaint.measureText(label);
-        float cx = (itemView.getLeft() + itemView.getRight()) / 2f;
-        float iconSize = 18 * getResources().getDisplayMetrics().density;
-        float totalW = textW + iconSize + 8 * getResources().getDisplayMetrics().density;
-        float startX = cx - totalW / 2f;
-        float baseY = bottom - reveal / 2f - (swipePaint.ascent() + swipePaint.descent()) / 2f;
-        swipePaint.setColor(isDarkMode ? 0xFFF4F4F5 : 0xFF09090B);
-        canvas.drawText(label, startX + iconSize + 8 * getResources().getDisplayMetrics().density, baseY, swipePaint);
-        Drawable archive = getArchiveIcon();
-        if (archive != null) {
-            archive.setBounds(Math.round(startX), Math.round(bottom - reveal / 2f - iconSize / 2f),
-                    Math.round(startX + iconSize), Math.round(bottom - reveal / 2f + iconSize / 2f));
-            archive.draw(canvas);
-        }
-    }
-
-    private Drawable getArchiveIcon() {
-        if (swipeIconArchive == null) {
-            swipeIconArchive = ContextCompat.getDrawable(this, R.drawable.ic_archive);
-            if (swipeIconArchive != null) {
-                swipeIconArchive = swipeIconArchive.mutate();
-                swipeIconArchive.setTint(isDarkMode ? Color.parseColor("#F4F4F5") : Color.parseColor("#09090B"));
-            }
-        }
-        return swipeIconArchive;
     }
 
     /** ثبت رویداد در دفترچه فعالیت — آتش‌ونسیان (هرگز مسیر اصلی را بلاک/نشکند). */
