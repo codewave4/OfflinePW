@@ -479,7 +479,7 @@ public class MainActivity extends AppCompatActivity {
         void onItemClick(VaultItem item);
     }
 
-    private final Set<String> revealedTotpItemIds = new HashSet<>();
+    private final java.util.Map<String, Long> revealedUntil = new java.util.concurrent.ConcurrentHashMap<>();
 
     public class VaultAdapter extends RecyclerView.Adapter<VaultAdapter.ViewHolder> {
         private List<VaultItem> fullList = new ArrayList<>();
@@ -679,6 +679,43 @@ public class MainActivity extends AppCompatActivity {
             return new ViewHolder(card, ivPin, tvTitle, tvCategory, tvUsername, tvMasked, tvTotpDisplay, tvUpdated, totpRow, totpRing);
         }
 
+        private void bindTotpState(ViewHolder holder, VaultItem item) {
+            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
+                holder.totpRow.setVisibility(View.VISIBLE);
+                Long exp = revealedUntil.get(item.getId());
+                boolean isRevealed = exp != null && exp > System.currentTimeMillis();
+                if (isRevealed) {
+                    holder.tvTotpDisplay.setText(TotpGenerator.generateCode(item.getTotpSecret()));
+                } else {
+                    holder.tvTotpDisplay.setText(isPersian ? "کد ۲مرحله‌ای: ••••••" : "TOTP: ••••••");
+                }
+                float ringFraction = (30 - (System.currentTimeMillis() % 30000L)) / 30000f;
+                holder.totpRing.setState(isDarkMode, ringFraction);
+                holder.totpRow.setOnClickListener(v -> {
+                    String currentCode = TotpGenerator.generateCode(item.getTotpSecret());
+                    copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentCode);
+                    logActivity("COPY_TOTP", item.getId());
+                    revealedUntil.put(item.getId(), System.currentTimeMillis() + 5000L);
+                    int pos = holder.getBindingAdapterPosition();
+                    if (pos != RecyclerView.NO_POSITION) {
+                        notifyItemChanged(pos, "totp");
+                    }
+                });
+            } else {
+                holder.totpRow.setVisibility(View.GONE);
+            }
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position, @NonNull List<Object> payloads) {
+            if (!payloads.isEmpty() && payloads.contains("totp")) {
+                VaultItem item = getItem(position);
+                if (item != null) bindTotpState(holder, item);
+                return;
+            }
+            super.onBindViewHolder(holder, position, payloads);
+        }
+
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             VaultItem item = displayList.get(position);
@@ -699,32 +736,7 @@ public class MainActivity extends AppCompatActivity {
             holder.tvCategory.setText(cat);
             holder.tvUsername.setText(isCardLike(item) ? maskCard(item.getUsername()) : item.getUsername());
 
-            if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
-                holder.totpRow.setVisibility(View.VISIBLE);
-                boolean isRevealed = revealedTotpItemIds.contains(item.getId());
-                long nowSecs = System.currentTimeMillis() / 1000;
-                long remainingSecs = 30 - (nowSecs % 30);
-                float ringFraction = (30 - (System.currentTimeMillis() % 30000L)) / 30000f;
-                holder.totpRing.setState(isDarkMode, ringFraction);
-                String code = TotpGenerator.generateCode(item.getTotpSecret());
-                holder.tvTotpDisplay.setText(isRevealed ? code : (isPersian ? "کد ۲مرحله‌ای: ••••••" : "TOTP: ••••••"));
-                holder.totpRow.setOnClickListener(v -> {
-                    String currentCode = TotpGenerator.generateCode(item.getTotpSecret());
-                    copyToClipboard(isPersian ? "کد TOTP" : "TOTP Code", currentCode);
-                    logActivity("COPY_TOTP", item.getId());
-                    revealedTotpItemIds.add(item.getId());
-                    // اگر در لحظه‌ی کلیک لیست تغییر کرده باشد (فیلتر/ریلود)،
-                    // پوزیشن -1 می‌شود و notifyItemChanged(-1) کرش می‌دهد.
-                    int pos = holder.getBindingAdapterPosition();
-                    if (pos != RecyclerView.NO_POSITION) notifyItemChanged(pos);
-                    holder.tvTotpDisplay.postDelayed(() -> {
-                        revealedTotpItemIds.remove(item.getId());
-                        notifyDataSetChanged();
-                    }, 5000L);
-                });
-            } else {
-                holder.totpRow.setVisibility(View.GONE);
-            }
+            bindTotpState(holder, item);
 
             holder.card.setStrokeColor(Color.parseColor(isDarkMode ? "#27272A" : "#E4E4E7"));
             holder.card.setCardBackgroundColor(Color.parseColor(isDarkMode ? "#18181B" : "#FFFFFF"));
@@ -792,7 +804,7 @@ public class MainActivity extends AppCompatActivity {
                     if (adapter != null) adapter.setItems(new ArrayList<>());
                     archivedItems = new ArrayList<>();
                     lastCopiedText = null;
-                    revealedTotpItemIds.clear();
+                    revealedUntil.clear();
                     if (dbHelper != null) dbHelper.close();
                 } catch (Exception ignored) {
                 }
@@ -930,13 +942,16 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             long second = System.currentTimeMillis() / 1000;
             if (adapter != null && adapter.hasTotpItems()) {
-                // فقط وقتی ثانیه‌ی شمارش معکوس عوض شده، لیست را به‌روز کن
                 if (second != lastTickSecond) {
                     lastTickSecond = second;
-                    adapter.notifyDataSetChanged();
+                    int count = adapter.getItemCount();
+                    if (count > 0) {
+                        adapter.notifyItemRangeChanged(0, count, "totp");
+                    }
                 }
             }
-            totpHandler.postDelayed(this, 1000);
+            long delay = 1000L - (System.currentTimeMillis() % 1000L);
+            totpHandler.postDelayed(this, delay);
         }
     };
 
@@ -1202,7 +1217,7 @@ public class MainActivity extends AppCompatActivity {
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
         archivedItems = new ArrayList<>();
-        revealedTotpItemIds.clear();
+        revealedUntil.clear();
         try {
             dbHelper.close();
         } catch (Exception ignored) {
@@ -1216,7 +1231,7 @@ public class MainActivity extends AppCompatActivity {
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
         archivedItems = new ArrayList<>();
-        revealedTotpItemIds.clear();
+        revealedUntil.clear();
         try {
             dbHelper.close(); // کانکشن SQLCipher استخری را ببند تا اثری از فایل در حافظه نماند
         } catch (Exception ignored) {
