@@ -697,7 +697,7 @@ public class MainActivity extends AppCompatActivity {
             String cat = item.getCategory() != null && !item.getCategory().isEmpty()
                     ? item.getCategory().toUpperCase(Locale.ROOT) : "LOGIN"; // Locale.ROOT: با لوکال ترکی «İ» نشود
             holder.tvCategory.setText(cat);
-            holder.tvUsername.setText(item.getUsername());
+            holder.tvUsername.setText(isCardLike(item) ? maskCard(item.getUsername()) : item.getUsername());
 
             if (item.getTotpSecret() != null && !item.getTotpSecret().trim().isEmpty()) {
                 holder.totpRow.setVisibility(View.VISIBLE);
@@ -1651,7 +1651,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (item.getUsername() != null && !item.getUsername().isEmpty()) {
             root.addView(buildFieldRow(isPersian ? "نام کاربری / شماره" : "Username / Card",
-                    item.getUsername(), false, item, "COPY_USERNAME"));
+                    item.getUsername(), isCardLike(item), item, "COPY_USERNAME"));
         }
         if (item.getPassword() != null && !item.getPassword().isEmpty()) {
             root.addView(buildFieldRow(isPersian ? "رمز عبور" : "Password",
@@ -1664,8 +1664,9 @@ public class MainActivity extends AppCompatActivity {
             root.addView(buildWebsiteFieldRow(item));
         }
         if (item.getNotes() != null && !item.getNotes().isEmpty()) {
+            boolean maskNotes = isCardLike(item) || "NOTE".equalsIgnoreCase(item.getCategory() == null ? "" : item.getCategory().trim());
             root.addView(buildFieldRow(isPersian ? "یادداشت" : "Notes",
-                    item.getNotes(), false, item, "COPY_NOTES"));
+                    item.getNotes(), maskNotes, item, "COPY_NOTES"));
         }
 
         LinearLayout actionsRow = new LinearLayout(this);
@@ -2583,6 +2584,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /** سنجش ساده و محافظه‌کارانه: طول + آنتروپی شانون + الگوی تک‌کلاسه. */
+    static boolean isCardLike(VaultItem it) {
+        if (it == null) return false;
+        String cat = it.getCategory() == null ? "" : it.getCategory().trim();
+        if (cat.equalsIgnoreCase("CARD")) return true;
+        String d = it.getUsername() == null ? "" : it.getUsername().replaceAll("[\\s-]", "");
+        return d.matches("\\d{13,19}");
+    }
+
+    static String maskCard(String s) {
+        if (s == null) return "";
+        String d = s.replaceAll("\\D", "");
+        return d.length() < 4 ? "••••" : "\u200E•••• •••• •••• " + d.substring(d.length() - 4);
+    }
+
     static boolean isWeakPassword(String pw) {
         if (pw.length() < 10) return true;
         if (shannonEntropyBits(pw) < 45) return true;
