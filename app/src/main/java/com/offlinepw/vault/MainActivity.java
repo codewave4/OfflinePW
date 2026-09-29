@@ -2345,6 +2345,7 @@ public class MainActivity extends AppCompatActivity {
                             dbHelper.setArchived(itemId, false);
                             dbHelper.logActivity("RESTORE_ITEM", itemId);
                             runOnUiThread(() -> {
+                                archivedItems.removeIf(i -> i.getId().equals(itemId));
                                 loadVaultData();
                                 Toast.makeText(this, isPersian ? "به ولت بازگشت" : "Restored to vault",
                                         Toast.LENGTH_SHORT).show();
@@ -2368,6 +2369,7 @@ public class MainActivity extends AppCompatActivity {
                                 dbHelper.deleteItem(itemId);
                                 dbHelper.logActivity("DELETE", itemId);
                                 runOnUiThread(() -> {
+                                    archivedItems.removeIf(i -> i.getId().equals(itemId));
                                     loadVaultData();
                                     Toast.makeText(this, isPersian ? "برای همیشه حذف شد" : "Deleted permanently",
                                             Toast.LENGTH_SHORT).show();
