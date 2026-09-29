@@ -19,6 +19,7 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.DocumentsContract;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PersistableBundle;
@@ -858,8 +859,8 @@ public class MainActivity extends AppCompatActivity {
                 showBackupImportDialog();
             });
 
-    private volatile byte[] pendingBackupBytes;
-    private volatile int pendingBackupCount;
+    private static volatile byte[] pendingBackupBytes;
+    private static volatile int pendingBackupCount;
     /** ذخیره‌ی بکاپ «بدون اینترنت» با انتخاب‌گر سیستمی (Downloads/Documents هر جایی که کاربر بخواهد). */
     private final ActivityResultLauncher<String> saveBackupLauncher =
             registerForActivityResult(new ActivityResultContracts.CreateDocument("application/octet-stream"), uri -> {
@@ -867,10 +868,22 @@ public class MainActivity extends AppCompatActivity {
                 final byte[] data = pendingBackupBytes;
                 final int count = pendingBackupCount;
                 pendingBackupBytes = null;
+                pendingBackupCount = 0;
                 if (uri == null || data == null) {
                     if (uri == null && data != null) {
+                        java.util.Arrays.fill(data, (byte) 0);
                         Toast.makeText(this, MainActivity.this.isPersian ? "ذخیره‌ی بکاپ لغو شد" : "Backup save cancelled",
                                 Toast.LENGTH_SHORT).show();
+                    } else if (uri != null && data == null) {
+                        // در صورت نبود داده (مثلاً مرگ پروسه)، فایل خالی ایجادشده را حذف می‌کنیم
+                        try {
+                            DocumentsContract.deleteDocument(getContentResolver(), uri);
+                        } catch (Exception ignored) {
+                        }
+                        Toast.makeText(this, MainActivity.this.isPersian
+                                        ? "خطا در بازیابی داده‌های بکاپ؛ لطفاً دوباره تلاش کنید"
+                                        : "Error retrieving backup data; please try again",
+                                Toast.LENGTH_LONG).show();
                     }
                     return;
                 }
@@ -879,6 +892,11 @@ public class MainActivity extends AppCompatActivity {
                         if (os == null) throw new java.io.IOException("no output stream");
                         os.write(data);
                     } catch (Exception e) {
+                        try {
+                            DocumentsContract.deleteDocument(getContentResolver(), uri);
+                        } catch (Exception ignored) {
+                        }
+                        java.util.Arrays.fill(data, (byte) 0);
                         runOnUiThread(() -> Toast.makeText(this, MainActivity.this.isPersian
                                         ? "ذخیره‌ی فایل بکاپ ناموفق بود" : "Writing the backup file failed",
                                 Toast.LENGTH_LONG).show());
@@ -2935,6 +2953,11 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (isFinishing() || isChangingConfigurations()) {
                         pendingBackupBytes = null;
+                        pendingBackupCount = 0;
+                        Toast.makeText(this, isPersian
+                                        ? "چرخش صفحه حین آماده‌سازی بکاپ؛ لطفاً دوباره تلاش کنید"
+                                        : "Screen rotated while preparing backup; please try again",
+                                Toast.LENGTH_SHORT).show();
                         return;
                     }
                     dialog.dismiss();
@@ -2943,6 +2966,7 @@ public class MainActivity extends AppCompatActivity {
                         isLaunchingFilePicker = true; saveBackupLauncher.launch(fileName);
                     } catch (Exception e) {
                         pendingBackupBytes = null;
+                        pendingBackupCount = 0;
                         busyButton.setEnabled(true);
                         Toast.makeText(this, isPersian
                                         ? "انتخاب‌گر ذخیره در این دستگاه در دسترس نیست؛ بکاپ ساخته نشد"
