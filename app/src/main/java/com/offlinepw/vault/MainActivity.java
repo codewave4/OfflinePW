@@ -1529,13 +1529,13 @@ public class MainActivity extends AppCompatActivity {
 
         // بازسازی بعد از چرخش صفحه: مقداری که کاربر تایپ کرده بود برمی‌گردد.
         if (restored != null) {
-            etTitle.setText(restored.getString("dlg_title", ""));
-            etCategory.setText(restored.getString("dlg_category", ""));
-            etUsername.setText(restored.getString("dlg_username", ""));
-            etPassword.setText(restored.getString("dlg_password", ""));
-            if (etTotpSecret != null) etTotpSecret.setText(restored.getString("dlg_totp", ""));
-            if (etWebsite != null) etWebsite.setText(restored.getString("dlg_website", ""));
-            etNotes.setText(restored.getString("dlg_notes", ""));
+            if (restored.containsKey("dlg_title"))    etTitle.setText(restored.getString("dlg_title"));
+            if (restored.containsKey("dlg_category")) etCategory.setText(restored.getString("dlg_category"));
+            if (restored.containsKey("dlg_username")) etUsername.setText(restored.getString("dlg_username"));
+            if (restored.containsKey("dlg_website") && etWebsite != null)
+                etWebsite.setText(restored.getString("dlg_website"));
+            // dlg_password / dlg_totp / dlg_notes عمداً در Bundle ذخیره نمی‌شوند:
+            // مقدار آن‌ها در حالت ویرایش از existingItem (بالاتر) دست‌نخورده باقی می‌ماند
         }
 
         btnGenerate.setOnClickListener(v -> {
