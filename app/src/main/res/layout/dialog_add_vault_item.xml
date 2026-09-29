@@ -67,6 +67,8 @@
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etUsername"
                 android:layout_width="match_parent"
+                android:inputType="textNoSuggestions|textVisiblePassword"
+                android:importantForAutofill="no"
                 android:layout_height="wrap_content"
                 android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />
@@ -93,7 +95,8 @@
                     android:id="@+id/etPassword"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:inputType="textPassword"
+                    android:inputType="textPassword|textNoSuggestions"
+                    android:importantForAutofill="no"
                     android:textColor="@color/nordic_text_primary"
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -127,6 +130,8 @@
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etTotpSecret"
                 android:layout_width="match_parent"
+                android:inputType="textNoSuggestions|textVisiblePassword"
+                android:importantForAutofill="no"
                 android:layout_height="wrap_content"
                 android:textColor="@color/nordic_text_primary" />
         </com.google.android.material.textfield.TextInputLayout>
@@ -164,6 +169,8 @@
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etNotes"
                 android:layout_width="match_parent"
+                android:inputType="textMultiLine|textNoSuggestions"
+                android:importantForAutofill="no"
                 android:layout_height="wrap_content"
                 android:textColor="@color/nordic_text_primary"
                 android:textSize="14sp" />

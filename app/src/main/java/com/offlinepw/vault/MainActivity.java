@@ -275,6 +275,58 @@ public class MainActivity extends AppCompatActivity {
             db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
         }
 
+        /**
+         * بازیابی دسته‌ای (Batch) داخل یک تراکنش واحد با بررسی updated_at
+         * تا داده‌های جدیدتر فعلی با بکاپ قدیمی‌تر بازنویسی نشوند.
+         */
+        public void restoreItemsBatch(List<VaultItem> items, CryptoManager crypto) {
+            String passphrase = getPassphrase();
+            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            SQLiteDatabase db = getWritableDatabase(passphrase);
+            db.beginTransaction();
+            try {
+                for (VaultItem item : items) {
+                    String id = item.getId();
+                    // بررسی زمان به‌روزرسانی آیتم موجود
+                    boolean shouldInsert = true;
+                    Cursor cursor = db.query(TABLE_ITEMS, new String[]{COLUMN_UPDATED_AT},
+                            COLUMN_ID + "=?", new String[]{id}, null, null, null);
+                    if (cursor != null) {
+                        try {
+                            if (cursor.moveToFirst()) {
+                                long existingUpdated = cursor.getLong(0);
+                                if (existingUpdated > item.getUpdatedAt()) {
+                                    shouldInsert = false; // نسخه فعلی داخل دیتابیس جدیدتر است
+                                }
+                            }
+                        } finally {
+                            cursor.close();
+                        }
+                    }
+
+                    if (shouldInsert) {
+                        ContentValues cv = new ContentValues();
+                        cv.put(COLUMN_ID, id);
+                        cv.put(COLUMN_TITLE, crypto.encrypt(item.getTitle(), id + "|title"));
+                        cv.put(COLUMN_CATEGORY, item.getCategory());
+                        cv.put(COLUMN_USERNAME, crypto.encrypt(item.getUsername(), id + "|username"));
+                        cv.put(COLUMN_PASSWORD, crypto.encrypt(item.getPassword(), id + "|password"));
+                        cv.put(COLUMN_NOTES, crypto.encrypt(item.getNotes(), id + "|notes"));
+                        cv.put(COLUMN_TOTP, crypto.encrypt(item.getTotpSecret(), id + "|totp"));
+                        cv.put(COLUMN_WEBSITE, crypto.encrypt(item.getWebsite(), id + "|website"));
+                        cv.put(COLUMN_PINNED, item.isPinned() ? 1 : 0);
+                        cv.put(COLUMN_CREATED_AT, item.getCreatedAt());
+                        cv.put(COLUMN_UPDATED_AT, item.getUpdatedAt());
+                        cv.put(COLUMN_ARCHIVED, item.isArchived() ? 1 : 0);
+                        db.insertWithOnConflict(TABLE_ITEMS, null, cv, SQLiteDatabase.CONFLICT_REPLACE);
+                    }
+                }
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+        }
+
         public void setArchived(String id, boolean archived) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
@@ -849,6 +901,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean isLaunchingFilePicker = false;
     private SharedPreferences prefs;
 
+    private static final long AUTO_LOCK_DELAY_MS = 30 * 1000L; // مهلت ۳۰ ثانیه‌ای جابه‌جایی میان برنامه‌ها
+    private final Runnable autoLockRunnable = this::lockVaultNow;
+
 
     // --- مدیریت فرم افزودن/ویرایش در چرخش صفحه ---
     private AlertDialog currentAddDialog;
@@ -898,11 +953,8 @@ public class MainActivity extends AppCompatActivity {
         try {
             android.content.IntentFilter lockFilter =
                     new android.content.IntentFilter(ACTION_SESSION_LOCKED);
-            if (android.os.Build.VERSION.SDK_INT >= 33) {
-                registerReceiver(sessionLockReceiver, lockFilter, Context.RECEIVER_NOT_EXPORTED);
-            } else {
-                registerReceiver(sessionLockReceiver, lockFilter);
-            }
+            androidx.core.content.ContextCompat.registerReceiver(
+                    this, sessionLockReceiver, lockFilter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
         } catch (Exception ignored) {
         }
 
@@ -1098,6 +1150,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         totpHandler.post(totpRunnable);
+        totpHandler.removeCallbacks(autoLockRunnable);
         // اگر کلیپی متعلق به ما در کلیپ‌بورد مانده (مثلاً پروسه در میانه‌ی
         // مهلت ۴۵ ثانیه‌ی پاک‌سازی خاتمه یافته)، حالا پاکش می‌کنیم.
         clearStaleClipboard();
@@ -1108,7 +1161,8 @@ public class MainActivity extends AppCompatActivity {
         super.onStop();
         totpHandler.removeCallbacks(totpRunnable);
         if (!isChangingConfigurations() && !isLaunchingFilePicker) {
-            lockVaultNow();
+            totpHandler.removeCallbacks(autoLockRunnable);
+            totpHandler.postDelayed(autoLockRunnable, AUTO_LOCK_DELAY_MS);
         }
     }
 
@@ -1120,6 +1174,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception ignored) {
         }
         totpHandler.removeCallbacks(totpRunnable);
+        totpHandler.removeCallbacks(autoLockRunnable);
         clipboardClearHandler.removeCallbacksAndMessages(null);
     }
 
@@ -1134,10 +1189,8 @@ public class MainActivity extends AppCompatActivity {
             outState.putString("dlg_title", fieldValue(dv.findViewById(R.id.etTitle)));
             outState.putString("dlg_category", fieldValue(dv.findViewById(R.id.etCategory)));
             outState.putString("dlg_username", fieldValue(dv.findViewById(R.id.etUsername)));
-            outState.putString("dlg_password", fieldValue(dv.findViewById(R.id.etPassword)));
-            outState.putString("dlg_totp", fieldValue(dv.findViewById(R.id.etTotpSecret)));
             outState.putString("dlg_website", fieldValue(dv.findViewById(R.id.etWebsite)));
-            outState.putString("dlg_notes", fieldValue(dv.findViewById(R.id.etNotes)));
+            // رمز عبور، کلید TOTP و یادداشت‌های امن عمداً در outState قرار نمی‌گیرند (جلوگیری از نشت رم/دیسک)
         }
     }
 
@@ -1180,8 +1233,7 @@ public class MainActivity extends AppCompatActivity {
         lastCopiedText = null;               // آخرین رمز کپی‌شده به‌صورت plaintext در این فیلد بود
         revealedTotpItemIds.clear();
         try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("", "")); // قفل = کلیپ حساس هم برود
+            clearStaleClipboard(); // فقط اگر کلیپ متعلق به ما باشد پاک می‌شود
         } catch (Exception ignored) {
         }
         try {
@@ -1388,6 +1440,7 @@ public class MainActivity extends AppCompatActivity {
         root.addView(btnClose);
 
         sheet.setContentView(root);
+        secureWindow(sheet);
         sheet.show();
     }
 
@@ -1404,6 +1457,7 @@ public class MainActivity extends AppCompatActivity {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_vault_item, null);
         builder.setView(dialogView);
         AlertDialog dialog = builder.create();
+        secureWindow(dialog);
 
         // ردیابی برای restore در چرخش صفحه
         currentAddDialog = dialog;
@@ -1954,9 +2008,16 @@ public class MainActivity extends AppCompatActivity {
      *Nordic-سازی AlertDialogهای تأییدی — بعد از show() صدا زده شود چون
      * دکمه‌ها و TextViewها پس از نمایش موجود می‌شوند. accent = رنگ دکمه‌ی مثبت.
      */
+    private void secureWindow(android.app.Dialog dialog) {
+        if (dialog != null && dialog.getWindow() != null) {
+            dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+
     private void styleNordicDialog(android.content.DialogInterface raw, int accentColor) {
         if (!(raw instanceof AlertDialog)) return;
         AlertDialog d = (AlertDialog) raw;
+        secureWindow(d);
         float density = getResources().getDisplayMetrics().density;
 
         android.view.Window w = d.getWindow();
@@ -2079,6 +2140,7 @@ public class MainActivity extends AppCompatActivity {
      * از getIdentifier استفاده می‌کنیم تا به نام R کتابخانه material وابسته نباشیم.
      */
     private void styleNordicSheet(android.app.Dialog dialog) {
+        secureWindow(dialog);
         int bsId = getResources().getIdentifier("design_bottom_sheet", "id", getPackageName());
         if (bsId == 0) return;
         View bs = dialog.findViewById(bsId);
@@ -2127,6 +2189,10 @@ public class MainActivity extends AppCompatActivity {
         root.addView(nordicMenuRow(isPersian ? "📓 دفترچه فعالیت" : "Activity log",
                 isPersian ? "۲۰۰ رویداد اخیر (رمزنگاری‌شده در ولت)" : "Last 200 events (encrypted in the vault)",
                 v -> { sheet.dismiss(); showActivityLogSheet(); }));
+        root.addView(nordicDivider());
+        root.addView(nordicMenuRow(isPersian ? "💾 پشتیبان‌گیری (بکاپ)" : "Backup vault",
+                isPersian ? "ساخت فایل .opwb رمزنگاری‌شده — کاملاً آفلاین" : "Create encrypted .opwb file — fully offline",
+                v -> { sheet.dismiss(); showBackupExportDialog(); }));
         root.addView(nordicDivider());
         root.addView(nordicMenuRow(isPersian ? "⬇ بازیابی از فایل بکاپ" : "Restore from backup file",
                 isPersian ? "فایل .opwb — کاملاً آفلاین" : "a .opwb file — fully offline",
@@ -2500,6 +2566,14 @@ public class MainActivity extends AppCompatActivity {
     static boolean isWeakPassword(String pw) {
         if (pw.length() < 10) return true;
         if (shannonEntropyBits(pw) < 45) return true;
+        String lower = pw.toLowerCase(Locale.ROOT);
+        // توالی‌های ساده و فوق‌العاده رایج
+        if (lower.contains("123456") || lower.contains("abcdef") || lower.contains("qwerty")
+                || lower.contains("password") || lower.contains("admin")) {
+            return true;
+        }
+        // تکرار یک کاراکتر بیش از ۳ بار متوالی
+        if (pw.matches(".*(.)\\1{3,}.*")) return true;
         boolean allDigits = true, allLower = true;
         for (char c : pw.toCharArray()) {
             if (!Character.isDigit(c)) allDigits = false;
@@ -2762,6 +2836,18 @@ public class MainActivity extends AppCompatActivity {
         tilPass.setLayoutParams(tilLp);
         root.addView(tilPass);
 
+        TextInputLayout tilPassConfirm = new TextInputLayout(this);
+        tilPassConfirm.setHint(isPersian ? "تکرار رمز بکاپ" : "Repeat Backup Password");
+        tilPassConfirm.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        TextInputEditText etPassConfirm = new TextInputEditText(this);
+        etPassConfirm.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tilPassConfirm.addView(etPassConfirm);
+        LinearLayout.LayoutParams tilConfirmLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tilConfirmLp.topMargin = 12;
+        tilPassConfirm.setLayoutParams(tilConfirmLp);
+        root.addView(tilPassConfirm);
+
         MaterialButton btnCreate = new MaterialButton(this);
         btnCreate.setText(isPersian ? "ساخت فایل بکاپ" : "Create Backup File");
         btnCreate.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#E4E4E7")));
@@ -2773,14 +2859,23 @@ public class MainActivity extends AppCompatActivity {
         root.addView(btnCreate);
 
         AlertDialog dialog = builder.setView(root).create();
+        secureWindow(dialog);
         dialog.show();
 
         btnCreate.setOnClickListener(v -> {
             String pass = etPass.getText() != null ? etPass.getText().toString() : "";
+            String passConfirm = etPassConfirm.getText() != null ? etPassConfirm.getText().toString() : "";
             if (pass.length() < MIN_BACKUP_PASSWORD_LENGTH) {
                 Toast.makeText(this, isPersian
                         ? ("رمز بکاپ باید حداقل " + MIN_BACKUP_PASSWORD_LENGTH + " کاراکتر باشد")
                         : ("Backup password must be at least " + MIN_BACKUP_PASSWORD_LENGTH + " characters"),
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!pass.equals(passConfirm)) {
+                Toast.makeText(this, isPersian
+                        ? "رمز بکاپ با تکرار آن یکسان نیست"
+                        : "Backup passwords do not match",
                         Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -2913,6 +3008,20 @@ public class MainActivity extends AppCompatActivity {
         root.addView(btnRestore);
 
         AlertDialog dialog = builder.setView(root).create();
+        secureWindow(dialog);
+        dialog.setOnCancelListener(d -> {
+            if (pendingImportUri != null) {
+                try { getContentResolver().releasePersistableUriPermission(pendingImportUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                pendingImportUri = null;
+            }
+        });
+        dialog.setOnDismissListener(d -> {
+            // آزاد کردن پرمیشن موقت در صورت لغو یا عدم مصرف
+            if (pendingImportUri != null) {
+                try { getContentResolver().releasePersistableUriPermission(pendingImportUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                pendingImportUri = null;
+            }
+        });
         dialog.show();
 
         btnRestore.setOnClickListener(v -> {
@@ -2929,6 +3038,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void doBackupImport(String backupPassword, AlertDialog dialog, MaterialButton busyButton) {
         final Uri uri = pendingImportUri;
+        pendingImportUri = null; // جلوگیری از آزادسازی پیش از موعد در dismiss
         new Thread(() -> {
             try {
                 byte[] fileBytes = readAllBytes(uri);
@@ -3000,22 +3110,11 @@ public class MainActivity extends AppCompatActivity {
     private void writeImportedItems(List<VaultItem> items) {
         new Thread(() -> {
             try {
-                for (VaultItem it : items) {
-                    dbHelper.insertItem(it, cryptoManager);
-                }
+                dbHelper.restoreItemsBatch(items, cryptoManager);
                 dbHelper.logActivity("RESTORE", null);
-                final Uri consumed = pendingImportUri;
                 final int count = items.size();
                 runOnUiThread(() -> {
-                    if (consumed != null) {
-                        try {
-                            getContentResolver().releasePersistableUriPermission(consumed,
-                                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        } catch (Exception ignored) {
-                        }
-                    }
                     if (isFinishing() || isChangingConfigurations()) return;
-                    pendingImportUri = null;
                     loadVaultData();
                     Toast.makeText(this, isPersian
                             ? (count + " آیتم بازیابی شد")
@@ -3058,12 +3157,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String generateStrongPassword(int length) {
-        final String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+";
+        final String upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        final String lower = "abcdefghijklmnopqrstuvwxyz";
+        final String digits = "0123456789";
+        final String symbols = "!@#$%^&*()-_=+";
+        final String all = upper + lower + digits + symbols;
         SecureRandom random = new SecureRandom();
-        StringBuilder sb = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            sb.append(chars.charAt(random.nextInt(chars.length())));
+        List<Character> chars = new ArrayList<>();
+        chars.add(upper.charAt(random.nextInt(upper.length())));
+        chars.add(lower.charAt(random.nextInt(lower.length())));
+        chars.add(digits.charAt(random.nextInt(digits.length())));
+        chars.add(symbols.charAt(random.nextInt(symbols.length())));
+        for (int i = 4; i < length; i++) {
+            chars.add(all.charAt(random.nextInt(all.length())));
         }
+        java.util.Collections.shuffle(chars, random);
+        StringBuilder sb = new StringBuilder(chars.size());
+        for (char c : chars) sb.append(c);
         return sb.toString();
     }
 }

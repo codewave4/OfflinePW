@@ -718,6 +718,9 @@ public class AuthActivity extends AppCompatActivity {
         root.addView(btnCreateNew);
 
         sheet.setContentView(root);
+        if (sheet.getWindow() != null) {
+            sheet.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        }
         sheet.show();
     }
 
