@@ -1142,6 +1142,14 @@ public class MainActivity extends AppCompatActivity {
             // وگرنه (در حال ویرایش) بعد از بارگذاری لیست در loadVaultData باز می‌شود.
         }
 
+        // پاک‌سازی پرمیشن‌های فایل بکاپ باقی‌مانده از اجراهای پیشین یا پروسه‌کشی‌ها
+        try {
+            for (android.content.UriPermission p : getContentResolver().getPersistedUriPermissions()) {
+                releaseUri(p.getUri());
+            }
+        } catch (Exception ignored) {
+        }
+
         loadVaultData(); // اگر Activity در پس‌زمینه از نو ساخته شود (مثلاً بعد از kill)، سریعاً قفل می‌شود
 
         // مدیریت فشردن دکمه بازگشت در صفحه‌ی اصلی: پاک‌سازی امن و خروج کامل از اپلیکیشن
@@ -3017,6 +3025,14 @@ public class MainActivity extends AppCompatActivity {
         return root.toString();
     }
 
+    private void releaseUri(Uri u) {
+        if (u == null) return;
+        try {
+            getContentResolver().releasePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Exception ignored) {
+        }
+    }
+
     private void showBackupImportDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LinearLayout root = new LinearLayout(this);
@@ -3068,14 +3084,14 @@ public class MainActivity extends AppCompatActivity {
         secureWindow(dialog);
         dialog.setOnCancelListener(d -> {
             if (pendingImportUri != null) {
-                try { getContentResolver().releasePersistableUriPermission(pendingImportUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                releaseUri(pendingImportUri);
                 pendingImportUri = null;
             }
         });
         dialog.setOnDismissListener(d -> {
             // آزاد کردن پرمیشن موقت در صورت لغو یا عدم مصرف
             if (pendingImportUri != null) {
-                try { getContentResolver().releasePersistableUriPermission(pendingImportUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                releaseUri(pendingImportUri);
                 pendingImportUri = null;
             }
         });
@@ -3098,7 +3114,12 @@ public class MainActivity extends AppCompatActivity {
         pendingImportUri = null; // جلوگیری از آزادسازی پیش از موعد در dismiss
         new Thread(() -> {
             try {
-                byte[] fileBytes = readAllBytes(uri);
+                byte[] fileBytes;
+                try {
+                    fileBytes = readAllBytes(uri);
+                } finally {
+                    releaseUri(uri);
+                }
                 String json = BackupManager.decrypt(fileBytes, backupPassword);
                 JSONObject root = new JSONObject(json);
                 if (!"offlinepw-backup-v1-vault".equals(root.optString("format", ""))) {
