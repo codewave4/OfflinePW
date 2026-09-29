@@ -914,6 +914,7 @@ public class MainActivity extends AppCompatActivity {
     // --- پاک‌سازی امن کلیپ‌بورد ---
     private static final String CLIP_MARKER_KEY = "offlinepw_sensitive_marker";
     private static final long CLIP_CLEAR_DELAY_MS = 45 * 1000L;
+    private static volatile boolean ownsClip = false;
     private final Handler clipboardClearHandler = new Handler(Looper.getMainLooper());
     private String lastCopiedText;         // فقط برای نسخه‌های قبل از Android 13 (بدون extras ماندگار)
 
@@ -1169,6 +1170,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (!isChangingConfigurations()) {
+            clearClipboardNow();
+            VaultSession.clear();
+        }
         try {
             unregisterReceiver(sessionLockReceiver);
         } catch (Exception ignored) {
@@ -1208,16 +1213,11 @@ public class MainActivity extends AppCompatActivity {
      * کل نشست و داده‌های حافظه پاک، دیتابیس بسته و کل Task خارج می‌شود.
      */
     private void secureExitApp() {
+        clearClipboardNow();
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
         archivedItems = new ArrayList<>();
-        lastCopiedText = null;
         revealedTotpItemIds.clear();
-        try {
-            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("", ""));
-        } catch (Exception ignored) {
-        }
         try {
             dbHelper.close();
         } catch (Exception ignored) {
@@ -1227,15 +1227,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void lockVaultNow() {
         if (isFinishing() || isChangingConfigurations()) return;
+        clearClipboardNow();
         VaultSession.clear();
         if (adapter != null) adapter.setItems(new ArrayList<>());
         archivedItems = new ArrayList<>();
-        lastCopiedText = null;               // آخرین رمز کپی‌شده به‌صورت plaintext در این فیلد بود
         revealedTotpItemIds.clear();
-        try {
-            clearStaleClipboard(); // فقط اگر کلیپ متعلق به ما باشد پاک می‌شود
-        } catch (Exception ignored) {
-        }
         try {
             dbHelper.close(); // کانکشن SQLCipher استخری را ببند تا اثری از فایل در حافظه نماند
         } catch (Exception ignored) {
@@ -1956,6 +1952,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (clipboard != null) {
+            ownsClip = true;
             clipboard.setPrimaryClip(clip);
             lastCopiedText = text;
             Toast.makeText(this, label + (isPersian ? " کپی شد" : " copied"), Toast.LENGTH_SHORT).show();
@@ -1975,30 +1972,66 @@ public class MainActivity extends AppCompatActivity {
      * recreate شده و تایمر قبلی از بین رفته)، زمان باقی‌مانده را مجدداً زمان‌بندی می‌کند
      * و زودتر از موعد پاک نمی‌کند.
      */
+    /**
+     * پاک‌سازی فوری کلیپ‌بورد اپلیکیشن بدون شرط زمانی (هنگام قفل شدن یا خروج).
+     * بدون وابستگی به getPrimaryClip (که روی Android 10+ در پس‌زمینه ممکن است null شود).
+     */
+    private void clearClipboardNow() {
+        if (!ownsClip && lastCopiedText == null) return;
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    clipboard.clearPrimaryClip();
+                } else {
+                    clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            ownsClip = false;
+            lastCopiedText = null;
+            clipboardClearHandler.removeCallbacksAndMessages(null);
+        }
+    }
+
     private void clearStaleClipboard() {
+        if (!ownsClip && lastCopiedText == null) return;
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard == null) return;
-        ClipData current = clipboard.getPrimaryClip();
-        if (current == null || current.getItemCount() == 0) return;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            PersistableBundle extras = current.getDescription().getExtras();
-            if (extras == null || !extras.containsKey(CLIP_MARKER_KEY)) return; // کلپ متعلق به ماست نه
-            long elapsed = System.currentTimeMillis() - extras.getLong(CLIP_MARKER_KEY, System.currentTimeMillis());
-            if (elapsed < CLIP_CLEAR_DELAY_MS) {
-                // هنوز در مهلت؛ تایمر باقی‌مانده را (باز)راه‌اندازی کن
-                clipboardClearHandler.removeCallbacksAndMessages(null);
-                clipboardClearHandler.postDelayed(this::clearStaleClipboard, CLIP_CLEAR_DELAY_MS - elapsed);
+        try {
+            ClipData current = clipboard.getPrimaryClip();
+            if (current == null || current.getItemCount() == 0) {
+                ownsClip = false;
+                lastCopiedText = null;
                 return;
             }
-        } else {
-            boolean isOurs = lastCopiedText != null
-                    && lastCopiedText.equals(String.valueOf(current.getItemAt(0).getText()));
-            if (!isOurs) return;
-        }
 
-        clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
-        lastCopiedText = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                PersistableBundle extras = current.getDescription().getExtras();
+                if (extras == null || !extras.containsKey(CLIP_MARKER_KEY)) return;
+                long elapsed = System.currentTimeMillis() - extras.getLong(CLIP_MARKER_KEY, System.currentTimeMillis());
+                if (elapsed < CLIP_CLEAR_DELAY_MS) {
+                    clipboardClearHandler.removeCallbacksAndMessages(null);
+                    clipboardClearHandler.postDelayed(this::clearStaleClipboard, CLIP_CLEAR_DELAY_MS - elapsed);
+                    return;
+                }
+            } else {
+                boolean isOurs = lastCopiedText != null
+                        && lastCopiedText.equals(String.valueOf(current.getItemAt(0).getText()));
+                if (!isOurs) return;
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                clipboard.clearPrimaryClip();
+            } else {
+                clipboard.setPrimaryClip(ClipData.newPlainText("", ""));
+            }
+        } catch (Exception ignored) {
+        } finally {
+            ownsClip = false;
+            lastCopiedText = null;
+        }
     }
 
     // ================= منوی بیشتر (نوردیک): سلامت، ترتیب، بایگانی، دفترچه =================
