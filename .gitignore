@@ -1,4 +1,5 @@
 *.keystore
+!app/debug.keystore
 *.jks
 local.properties
 .idea/
