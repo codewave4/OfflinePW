@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">Lock OfflinePW</string>
+    <string name="tile_locked">Locked</string>
+    <string name="tile_unlocked">Unlocked</string>
+</resources>
