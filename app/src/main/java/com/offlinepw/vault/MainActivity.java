@@ -44,7 +44,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -843,7 +842,6 @@ public class MainActivity extends AppCompatActivity {
     private com.google.android.material.chip.ChipGroup chipGroup;
 
     // --- بکاپ/بازیابی ---
-    private static final String PROVIDER_AUTHORITY = "com.offlinepw.vault.fileprovider";
     private Uri pendingImportUri;
     private final ActivityResultLauncher<String[]> openBackupLauncher =
             registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
