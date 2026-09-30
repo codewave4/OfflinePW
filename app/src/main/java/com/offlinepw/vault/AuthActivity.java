@@ -83,6 +83,8 @@ public class AuthActivity extends AppCompatActivity {
 
         authPrefs = getSharedPreferences(PREF_AUTH, MODE_PRIVATE);
         settingsPrefs = getSharedPreferences(PREF_SETTINGS, MODE_PRIVATE);
+        boolean isDark = settingsPrefs.getBoolean("is_dark_mode", true);
+        UiUtils.applyEdgeToEdge(this, isDark);
         isPersian = settingsPrefs.getBoolean("is_persian", false);
 
         tvAuthPrompt = findViewById(R.id.tvAuthPrompt);

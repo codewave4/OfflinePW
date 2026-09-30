@@ -967,6 +967,7 @@ public class MainActivity extends AppCompatActivity {
 
         prefs = getSharedPreferences("OfflinePW_Prefs", MODE_PRIVATE);
         isDarkMode = prefs.getBoolean("is_dark_mode", true);
+        UiUtils.applyEdgeToEdge(this, isDarkMode);
         isPersian = prefs.getBoolean("is_persian", false);
 
         SQLiteDatabase.loadLibs(this);

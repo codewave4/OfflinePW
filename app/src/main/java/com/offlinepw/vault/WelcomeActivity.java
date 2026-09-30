@@ -40,9 +40,11 @@ public class WelcomeActivity extends AppCompatActivity {
         }
 
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
-        setContentView(R.layout.activity_welcome);
+setContentView(R.layout.activity_welcome);
 
         settingsPrefs = getSharedPreferences(PREF_SETTINGS, MODE_PRIVATE);
+        boolean isDark = settingsPrefs.getBoolean("is_dark_mode", true);
+        UiUtils.applyEdgeToEdge(this, isDark);
         isPersian = settingsPrefs.getBoolean("is_persian", false);
 
         tvWelcomeTitle = findViewById(R.id.tvWelcomeTitle);
