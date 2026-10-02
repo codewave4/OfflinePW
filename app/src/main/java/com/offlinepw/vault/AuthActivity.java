@@ -441,14 +441,16 @@ public class AuthActivity extends AppCompatActivity {
         new Thread(() -> {
             SecretKey unlocked = null;
             boolean decoyHit = false;
-            boolean anyWrong = false;
-            boolean anyTransient = false;
+            boolean masterWrong = false;
+            boolean masterTransient = false;
 
             java.util.List<String> candidates = PasswordNormalizer.candidates(rawPassword);
 
             String saltB64 = authPrefs.getString(KEY_KEK_SALT, "");
             String wrappedDek = authPrefs.getString(KEY_WRAPPED_DEK, "");
-            if (!saltB64.isEmpty() && !wrappedDek.isEmpty()) {
+            if (saltB64.isEmpty() || wrappedDek.isEmpty()) {
+                masterTransient = true;
+            } else {
                 try {
                     byte[] salt = Base64.decode(saltB64, Base64.NO_WRAP);
                     for (String cand : candidates) {
@@ -458,16 +460,14 @@ public class AuthActivity extends AppCompatActivity {
                             unlocked = unwrapDek(wrappedDek, kek);
                             break;
                         } catch (javax.crypto.BadPaddingException e) {
-                            anyWrong = true;
+                            masterWrong = true;
                         } catch (Throwable t) {
-                            anyTransient = true;
+                            masterTransient = true;
                         }
                     }
                 } catch (Throwable t) {
-                    anyTransient = true;
+                    masterTransient = true;
                 }
-            } else {
-                anyTransient = true;
             }
 
             if (unlocked == null) {
@@ -479,22 +479,15 @@ public class AuthActivity extends AppCompatActivity {
                             unlocked = d;
                             decoyHit = true;
                             break;
-                        } else {
-                            if (getDatabasePath(DECOY_DB_NAME).exists()) {
-                                anyWrong = true;
-                            }
                         }
-                    } catch (Throwable t) {
-                        anyTransient = true;
+                    } catch (Throwable ignored) {
+                        // decoy errors never count as wrong-password, only as potential success
                     }
                 }
             }
 
-            boolean isWrongPassword = anyWrong;
-            boolean isTransientError = anyTransient && !anyWrong;
-
             if (unlocked == null) {
-                if (!isTransientError && isWrongPassword) {
+                if (masterWrong && !masterTransient) {
                     int newAttempts;
                     synchronized (AuthActivity.class) {
                         int cur = authPrefs.getInt(KEY_FAILED_ATTEMPTS, 0);
