@@ -245,8 +245,8 @@ public class AuthActivity extends AppCompatActivity {
                     : ("SECURITY WARNING: only " + remaining + " more attempt" + (remaining == 1 ? "" : "s") + " left.\nAfter that, ALL passwords and data in this app will be permanently erased!"));
         } else {
             tvAuthWarning.setText(isPersian
-                    ? "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، بازیابی آن غیرممکن است.\nتوجه: ۳ بار ورود رمز اشتباه = پاک شدن کامل همهی دادهها."
-                    : "Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible.\nNote: 3 wrong attempts = ALL data will be permanently erased.");
+                    ? "رمز عبور شما در برنامه ذخیره نخواهد شد؛ بنابراین اگر آن را فراموش کنید، هیچ راهی برای بازیابی آن وجود ندارد.\nتوجه: ۳ بار ورود رمز اشتباه = پاک شدن کامل همهی دادهها."
+                    : "Your master password is never stored; therefore, if forgotten, there is no way to recover it.\nNote: 3 wrong attempts = ALL data will be permanently erased.");
         }
     }
 

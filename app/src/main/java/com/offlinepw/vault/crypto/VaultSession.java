@@ -1,13 +1,9 @@
 package com.offlinepw.vault.crypto;
 
-import java.util.Arrays;
-
 import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
  * نگهدارنده‌ی نشست رمزنگاری (DEK) در حافظه.
- * شامل تلاش برای پاک‌سازی مواد کلیدی پس از خروج از نشست.
  */
 public class VaultSession {
     private static volatile SecretKey dek;
@@ -39,18 +35,8 @@ public class VaultSession {
     }
 
     public static void clear() {
-        SecretKey current = dek;
+        // reference is dropped; wiping the underlying bytes in Java/native memory is not guaranteed
         dek = null;
-        decoy = false; // حالت فریبنده هم با قفل شدن نشست پاک می‌شود
-        if (current != null) {
-            try {
-                byte[] encoded = current.getEncoded();
-                if (encoded != null) Arrays.fill(encoded, (byte) 0);
-                if (current instanceof SecretKeySpec) {
-                    ((SecretKeySpec) current).destroy();
-                }
-            } catch (Exception ignored) {
-            }
-        }
+        decoy = false;
     }
 }

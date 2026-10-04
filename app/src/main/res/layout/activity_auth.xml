@@ -88,7 +88,7 @@
         android:id="@+id/tvAuthWarning"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Your master password is never stored; therefore, if forgotten, recovery is mathematically impossible."
+        android:text="Your master password is never stored; therefore, if forgotten, there is no way to recover it."
         android:textColor="#EF4444"
         android:textSize="12sp"
         android:gravity="center"

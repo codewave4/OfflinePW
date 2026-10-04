@@ -1,7 +1,7 @@
-# 🔐 OfflinePW — Zero-Knowledge Offline Password & 2FA Manager
+# 🔐 OfflinePW — Offline, local-only Password & 2FA Manager
 
 <p align="center">
-  <b>An Air-Gapped, Zero-Knowledge Offline Password & TOTP 2FA Vault for Android</b>
+  <b>An Air-Gapped, Offline, local-only Password & TOTP 2FA Vault for Android</b>
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
 
 ## Overview
 
-**OfflinePW** is an open-source, ultra-secure, completely offline password manager and TOTP 2FA authenticator for Android. Designed around a strict **Zero-Knowledge** architecture, it keeps your credentials, keys, and personal notes entirely on your device, encrypted at rest with AES-256-GCM and SQLCipher.
+**OfflinePW** is an open-source, completely offline password manager and TOTP 2FA authenticator for Android. Designed around a strict **Offline, local-only** architecture, it keeps your credentials, keys, and personal notes entirely on your device, encrypted at rest with AES-256-GCM and SQLCipher.
 
 The application declares **zero internet permissions**, ensuring an air-gapped environment with no network communication, no background analytics, and no remote dependencies.
 
@@ -25,34 +25,37 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 
 ## Security Architecture
 
-1. **Zero-Knowledge Local Encryption (AES-256-GCM)**
+1. **Offline, local-only Encryption (AES-256-GCM)**
    - All sensitive payload fields (passwords, usernames, 2FA secret keys, secure notes) are individually encrypted using standard **AES-256-GCM** (Galois/Counter Mode).
    - Authenticated encryption ensures both confidentiality and cryptographic integrity against tampering. A fresh random 12-byte IV is generated for every encryption operation.
 
 2. **Key Hierarchy (DEK / KEK)**
    - A random 256-bit Data Encryption Key (DEK) protects all payloads; it is itself encrypted (wrapped) by a Key Encryption Key (KEK) derived from your master password.
-   - Only the wrapped DEK is persisted on disk — the raw DEK exists solely in memory during an unlocked session and is wiped when the vault locks.
+   - Only the wrapped DEK is persisted on disk — the raw DEK exists solely in memory during an unlocked session and is released from app memory when the vault locks (reference cleared and database connection closed), but wiping the underlying bytes in Java/native memory is not guaranteed.
 
-3. **Brute-Force Resistant Master Password (PBKDF2)**
+3. **Slows Down Brute-Force (PBKDF2)**
    - Authentication is guarded by your master password (min 10 characters).
    - The KEK is derived using **PBKDF2WithHmacSHA256** with **600,000 iterations** and a unique cryptographically secure 16-byte random salt per installation.
+   - Persian/Arabic passwords are normalized before key derivation (ی/ي, ک/ك mapped, Persian and Arabic digits to ASCII, ZWNJ and invisible characters removed). For backward compatibility with old vaults, the raw password is tried first.
    - The plain text master password is never stored anywhere.
 
 4. **Self-Destruct Anti-Brute-Force Protection**
-   - After **3 consecutive incorrect master password attempts**, the app **permanently erases all data** (vault database, 2FA keys, wrapped keys and settings) to guarantee that no attacker can ever brute-force their way into your secrets.
-   - The attempt counter is stored persistently and is never reset by simply restarting the app; only a successful unlock resets it.
+   - After **3 consecutive incorrect master password attempts**, the app **permanently erases all data** (vault database, 2FA keys, wrapped keys and settings).
+   - This protection only limits guessing from inside the app itself and the attempt counter is stored in SharedPreferences; an attacker with access to the app's files (root or copying files) can try passwords offline and only the cost of PBKDF2 slows them down. A strong master password is the most important factor.
+   - The attempt counter is never reset by simply restarting the app; only a successful unlock resets it.
 
 5. **Integrated 2FA TOTP Engine (RFC 6238)**
    - Native RFC 6238 time-based one-time password generator with 30-second interval rotation.
    - **Shoulder-Surfing Defense**: TOTP codes are masked by default (`••••••`) alongside passwords. Tapping the code reveals it for 5 seconds and automatically copies it to the clipboard.
 
 6. **True Air-Gapped Operation (No Internet Permission)**
-   - The application does not request `android.permission.INTERNET` in its manifest.
-   - Operating in a complete sandbox, no data can be exfiltrated, uploaded, or transmitted over any network interface.
+   - The application does not request `android.permission.INTERNET` in its manifest and `allowBackup=false` is set.
+   - The app itself does not establish any network connection, but data can still leave the app via user actions (clipboard, exported backup file).
 
 7. **Anti-Screen Scraping & OS Protection (`FLAG_SECURE`)**
    - Hardened with Android's window-level `FLAG_SECURE` attribute across all application surfaces.
    - Blocks screenshots, screen recordings, screen casting, and visual memory caching in the Android Recent Apps / Task Switcher overview.
+   - This does not prevent photographing the screen with a camera or someone physically seeing the display.
 
 ---
 
@@ -72,8 +75,8 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 - **Encrypted Activity Log**: The last 200 vault events (views, copies, edits, pin/archive, backup/restore) are recorded in a local table inside the same SQLCipher-encrypted database — never leaves the device — viewable in the ⋮ menu with a one-tap clear. Titles are not stored in the log; they are resolved from the vault at view time.
 - **Quick-Settings Tile**: A "Lock OfflinePW" tile in the notification shade instantly wipes the session key, **immediately scrubs decrypted vault rows and closes the database connection** in any still-alive main screen (via an in-app broadcast), and drops the app to the unlock screen. No extra permissions (system-protected via `BIND_QUICK_SETTINGS_TILE`).
 - **Nordic Sheets**: The item detail sheet and every ⋮-menu screen use the shared Nordic bottom-sheet style — rounded surface, bordered field boxes, monospace typography and theme-aware semantic colors (light & dark).
-- **Decoy Vault (duress password)**: While creating the vault you may set an optional second password that opens a completely separate, real-but-harmless vault (its own SQLCipher file and its own DEK, never held in memory together with the real one). The decoy key is **derived from the decoy password itself on every unlock** (PBKDF2 over a salt derived from the master salt) — nothing about it is ever written to preferences; the only on-disk trace is the vault file itself under a deliberately neutral name (`metrics_cache.db`), and backups carry an opaque `a`/`b` bucket tag instead of any "decoy" wording. The decoy vault comes pre-seeded with plausible filler items so it never looks empty, and it behaves identically — search, pin, archive, TOTP, per-vault activity log and backups. The decoy password is asked **only once**, during vault creation; no setting to enable, change or remove it ever appears again. Wrong-password attempts try both keys silently, so the unlock prompt gives no timing or messaging hint that a second vault exists. A "3 wrong attempts" wipe and the full data wipe erase **both** vaults. Note: this strongly raises the bar against password coercion and casual inspection, but no on-device scheme gives perfect plausible deniability against a privileged forensic adversary who knows exactly what to look for.
-- **Encrypted Backup & Restore**: **Press and hold the `+` button for 2 seconds** (with haptic feedback) to export — the whole vault is re-serialized and encrypted with AES-256-GCM using a key derived from a *separate backup password* (PBKDF2-SHA256, 600k iterations, random salt), then saved through the system file picker (e.g. to the Downloads folder) — fully local, no network involved at any step. **Restore** lives in the ⋮ menu: pick a backup file, enter the backup password, and the items are merged back into the vault (same-ID items are updated, new ones added). A backup is useless without its backup password, so the zero-knowledge property is preserved.
+- **Decoy Vault (duress password)**: While creating the vault you may set an optional second password that opens a completely separate, real-but-harmless vault (its own SQLCipher file and its own DEK, never held in memory together with the real one). The decoy key is **derived from the decoy password itself on every unlock** (PBKDF2 over a salt derived from the master salt) — nothing about it is ever written to preferences; the only on-disk trace is the vault file itself under a deliberately neutral name (`metrics_cache.db`), and backups carry an opaque `a`/`b` bucket tag instead of any "decoy" wording. The decoy vault comes pre-seeded with plausible filler items so it never looks empty, and it behaves identically — search, pin, archive, TOTP, per-vault activity log and backups. The decoy password is asked **only once**, during vault creation; no setting to enable, change or remove it ever appears again. Wrong-password attempts try both keys silently, so the unlock prompt gives no timing or messaging hint that a second vault exists. A "3 wrong attempts" wipe and the full data wipe erase **both** vaults. This is a convenience feature, not strong deniability (second database file exists, sample data is identical for all installs and wrong-password timing can leak existence).
+- **Encrypted Backup & Restore**: **Press and hold the `+` button for 2 seconds** (with haptic feedback) to export — the whole vault is re-serialized and encrypted with AES-256-GCM using a key derived from a *separate backup password* (PBKDF2-SHA256, 600k iterations, random salt), then saved through the system file picker (e.g. to the Downloads folder) — fully local, no network involved at any step. **Restore** lives in the ⋮ menu: pick a backup file, enter the backup password, and the items are merged back into the vault (same-ID items are updated, new ones added). A backup is useless without its backup password.
 - **Bilingual Support**: Instant toggle between English (EN) and Persian (FA).
 - **Dark & Light Themes**: Minimalist, high-contrast Material Design 3 interface with battery-saving dark mode.
 
@@ -82,7 +85,7 @@ The application declares **zero internet permissions**, ensuring an air-gapped e
 ## Building & Installation
 
 ### Prerequisites
-- **Android SDK**: API level 26 (Android 8.0) minimum, targeting API 34+
+- **Android SDK**: API level 26 (Android 8.0) minimum, targeting API 35
 - **JDK**: Java 17 or Java 21
 - **Gradle**: the bundled wrapper uses Gradle 8.13 (no manual install needed)
 
@@ -101,6 +104,19 @@ is automatically signed with the **debug** key so the APK stays installable on y
 device. On CI (GitHub Actions), if the `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` secrets
 are set, the release APK is signed with your real key; otherwise CI falls back to a
 debug build.
+
+Note: `app/debug.keystore` is intentionally committed to the repo and its key is public (password `android`), so its signature provides no proof of APK authenticity; for real distribution you must sign with your own private key via Secrets `KEYSTORE_BASE64` and `KEYSTORE_PASSWORD`.
+
+---
+
+## Security Model & Limitations
+
+- **What it protects:** locked or stolen device where attacker does not have the master password; database at rest (AES-256-GCM + SQLCipher); unintentional sharing because the app has no INTERNET permission and `allowBackup=false`.
+- **What it does NOT protect:** malware with root access that can read app files or memory; process-memory access while the vault is unlocked; keylogger or compromised keyboard; shoulder surfing or camera recording the screen; clipboard contents after copy.
+- **Brute-force:** only PBKDF2 600k iterations slows offline guessing if files are copied; a strong, unique master password is essential.
+- **Decoy vault:** convenience, not strong plausible deniability — second file exists, sample items are same for all installs, timing differences may leak.
+- **Backups & clipboard:** user-initiated export or copy can exfiltrate data.
+- **No independent security audit:** this project has not undergone an independent security audit; use at your own risk and review the code.
 
 ---
 
