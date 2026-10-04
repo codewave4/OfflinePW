@@ -170,6 +170,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        private final String openPassphrase;
+
         public VaultDatabaseHelper(Context context) {
             this(context, getPassphrase());
         }
@@ -177,6 +179,35 @@ public class MainActivity extends AppCompatActivity {
         public VaultDatabaseHelper(Context context, String passphrase) {
             super(context, com.offlinepw.vault.crypto.VaultSession.isDecoy()
                     ? DECOY_DB_NAME : "offline_pw_vault.db", passphrase, null, 6, 0, null, null, false);
+            this.openPassphrase = passphrase != null ? passphrase : "";
+        }
+
+        @Override
+        public SQLiteDatabase getWritableDatabase() {
+            if (openPassphrase == null || openPassphrase.isEmpty()) {
+                throw new IllegalStateException("Session key missing");
+            }
+            return super.getWritableDatabase();
+        }
+
+        @Override
+        public SQLiteDatabase getReadableDatabase() {
+            if (openPassphrase == null || openPassphrase.isEmpty()) {
+                throw new IllegalStateException("Session key missing");
+            }
+            return super.getReadableDatabase();
+        }
+
+        private void checkNotStale() {
+            String current = getPassphrase();
+            if (!current.equals(openPassphrase)) {
+                throw new IllegalStateException("Session key missing");
+            }
+        }
+
+        private boolean isStale() {
+            String current = getPassphrase();
+            return !current.equals(openPassphrase);
         }
 
         private void createLogTable(SQLiteDatabase db) {
@@ -261,6 +292,7 @@ public class MainActivity extends AppCompatActivity {
         public void insertItem(VaultItem item, CryptoManager crypto) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             String id = item.getId();
@@ -286,6 +318,7 @@ public class MainActivity extends AppCompatActivity {
         public void restoreItemsBatch(List<VaultItem> items, CryptoManager crypto) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             db.beginTransaction();
             try {
@@ -334,6 +367,7 @@ public class MainActivity extends AppCompatActivity {
         public void setArchived(String id, boolean archived) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_ARCHIVED, archived ? 1 : 0);
@@ -344,7 +378,8 @@ public class MainActivity extends AppCompatActivity {
         /** آرشیوهایی که بیش از ۳۰ روز از آخرین تغییرشان می‌گذرد، قطعی پاک می‌شوند. */
         public void purgeExpiredArchived() {
             String passphrase = getPassphrase();
-            if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (passphrase.isEmpty()) return;
+            if (!passphrase.equals(openPassphrase)) return;
             long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
             try {
                 SQLiteDatabase db = getWritableDatabase();
@@ -359,6 +394,7 @@ public class MainActivity extends AppCompatActivity {
         public void logActivity(String kind, String itemId) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) return;
+            if (!passphrase.equals(openPassphrase)) return;
             try {
                 SQLiteDatabase db = getWritableDatabase();
                 ContentValues cv = new ContentValues();
@@ -386,6 +422,7 @@ public class MainActivity extends AppCompatActivity {
             List<LogEntry> out = new ArrayList<>();
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getReadableDatabase();
             Cursor c = null;
             try {
@@ -403,6 +440,7 @@ public class MainActivity extends AppCompatActivity {
         public void clearActivityLog() {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             db.delete(TABLE_LOG, null, null);
         }
@@ -410,6 +448,7 @@ public class MainActivity extends AppCompatActivity {
         public void setPinned(String id, boolean pinned) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_PINNED, pinned ? 1 : 0);
@@ -420,6 +459,7 @@ public class MainActivity extends AppCompatActivity {
             List<VaultItem> list = new ArrayList<>();
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getReadableDatabase();
             Cursor c = null;
             try {
@@ -473,6 +513,7 @@ public class MainActivity extends AppCompatActivity {
         public void deleteItem(String id) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
+            if (!passphrase.equals(openPassphrase)) throw new IllegalStateException("Session key missing");
             SQLiteDatabase db = getWritableDatabase();
             db.delete(TABLE_ITEMS, COLUMN_ID + "=?", new String[]{id});
         }

@@ -23,7 +23,8 @@ public class OfflinePWApplication extends Application {
         // sqlcipher-android: بارگذاری native با System.loadLibrary
         try {
             System.loadLibrary("sqlcipher");
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            android.util.Log.e("OfflinePW", "sqlcipher load failed", t);
         }
     }
 
