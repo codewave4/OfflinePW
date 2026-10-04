@@ -9,8 +9,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.database.Cursor;
-import net.sqlcipher.database.SQLiteDatabase;
-import net.sqlcipher.database.SQLiteOpenHelper;
+import net.zetetic.database.sqlcipher.SQLiteDatabase;
+import net.zetetic.database.sqlcipher.SQLiteOpenHelper;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -171,8 +171,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public VaultDatabaseHelper(Context context) {
+            this(context, getPassphrase());
+        }
+
+        public VaultDatabaseHelper(Context context, String passphrase) {
             super(context, com.offlinepw.vault.crypto.VaultSession.isDecoy()
-                    ? DECOY_DB_NAME : "offline_pw_vault.db", null, 6);
+                    ? DECOY_DB_NAME : "offline_pw_vault.db", passphrase, null, 6, 0, null, null, false);
         }
 
         private void createLogTable(SQLiteDatabase db) {
@@ -186,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                     "item_id TEXT)");
         }
 
-        private String getPassphrase() {
+        private static String getPassphrase() {
             javax.crypto.SecretKey dek = com.offlinepw.vault.crypto.VaultSession.getDek();
             if (dek == null) return "";
             return android.util.Base64.encodeToString(dek.getEncoded(), android.util.Base64.NO_WRAP);
@@ -257,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
         public void insertItem(VaultItem item, CryptoManager crypto) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             String id = item.getId();
             cv.put(COLUMN_ID, id);
@@ -282,7 +286,7 @@ public class MainActivity extends AppCompatActivity {
         public void restoreItemsBatch(List<VaultItem> items, CryptoManager crypto) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             db.beginTransaction();
             try {
                 for (VaultItem item : items) {
@@ -330,7 +334,7 @@ public class MainActivity extends AppCompatActivity {
         public void setArchived(String id, boolean archived) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_ARCHIVED, archived ? 1 : 0);
             cv.put(COLUMN_UPDATED_AT, System.currentTimeMillis());
@@ -343,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
             long cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000;
             try {
-                SQLiteDatabase db = getWritableDatabase(passphrase);
+                SQLiteDatabase db = getWritableDatabase();
                 db.execSQL("DELETE FROM " + TABLE_ITEMS + " WHERE " + COLUMN_ARCHIVED + "=1 AND " +
                         "(CASE WHEN " + COLUMN_UPDATED_AT + ">0 THEN " + COLUMN_UPDATED_AT +
                         " ELSE " + COLUMN_CREATED_AT + " END) < ?", new Object[]{cutoff});
@@ -356,7 +360,7 @@ public class MainActivity extends AppCompatActivity {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) return;
             try {
-                SQLiteDatabase db = getWritableDatabase(passphrase);
+                SQLiteDatabase db = getWritableDatabase();
                 ContentValues cv = new ContentValues();
                 cv.put("ts", System.currentTimeMillis());
                 cv.put("kind", kind);
@@ -382,7 +386,7 @@ public class MainActivity extends AppCompatActivity {
             List<LogEntry> out = new ArrayList<>();
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getReadableDatabase(passphrase);
+            SQLiteDatabase db = getReadableDatabase();
             Cursor c = null;
             try {
                 c = db.query(TABLE_LOG, new String[]{"ts", "kind", "item_id"},
@@ -399,14 +403,14 @@ public class MainActivity extends AppCompatActivity {
         public void clearActivityLog() {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             db.delete(TABLE_LOG, null, null);
         }
 
         public void setPinned(String id, boolean pinned) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             ContentValues cv = new ContentValues();
             cv.put(COLUMN_PINNED, pinned ? 1 : 0);
             db.update(TABLE_ITEMS, cv, COLUMN_ID + "=?", new String[]{id});
@@ -416,7 +420,7 @@ public class MainActivity extends AppCompatActivity {
             List<VaultItem> list = new ArrayList<>();
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getReadableDatabase(passphrase);
+            SQLiteDatabase db = getReadableDatabase();
             Cursor c = null;
             try {
                 // آیتم‌های پین‌شده همیشه بالای لیست، بقیه به ترتیب ثبت
@@ -469,7 +473,7 @@ public class MainActivity extends AppCompatActivity {
         public void deleteItem(String id) {
             String passphrase = getPassphrase();
             if (passphrase.isEmpty()) throw new IllegalStateException("Session key missing");
-            SQLiteDatabase db = getWritableDatabase(passphrase);
+            SQLiteDatabase db = getWritableDatabase();
             db.delete(TABLE_ITEMS, COLUMN_ID + "=?", new String[]{id});
         }
     }
@@ -967,8 +971,6 @@ public class MainActivity extends AppCompatActivity {
         isDarkMode = prefs.getBoolean("is_dark_mode", true);
         UiUtils.applyEdgeToEdge(this, isDarkMode);
         isPersian = prefs.getBoolean("is_persian", false);
-
-        SQLiteDatabase.loadLibs(this);
 
         cryptoManager = new CryptoManager();
         VaultDatabaseHelper.ensureDecoyMigration(this);

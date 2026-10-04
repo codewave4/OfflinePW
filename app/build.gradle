@@ -61,7 +61,7 @@ dependencies {
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
-    implementation 'net.zetetic:android-database-sqlcipher:4.5.4'
-    // sqlcipher 4.5+ برای کامپایل به androidx.sqlite (SupportSQLite*) نیاز دارد
+    implementation 'net.zetetic:sqlcipher-android:4.19.1'
+    // sqlcipher-android برای کامپایل به androidx.sqlite نیاز دارد (transitive 2.7.0)
     implementation 'androidx.sqlite:sqlite:2.4.0'
 }

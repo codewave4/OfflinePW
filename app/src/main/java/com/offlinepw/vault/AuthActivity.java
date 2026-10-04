@@ -580,9 +580,9 @@ public class AuthActivity extends AppCompatActivity {
             }
 
             VaultSession.setDecoy(true);
-            helper = new MainActivity.VaultDatabaseHelper(this);
-            net.sqlcipher.database.SQLiteDatabase db = helper.getWritableDatabase(
+            helper = new MainActivity.VaultDatabaseHelper(this,
                     Base64.encodeToString(dek2.getEncoded(), Base64.NO_WRAP));
+            net.zetetic.database.sqlcipher.SQLiteDatabase db = helper.getWritableDatabase();
             android.database.Cursor c = db.rawQuery("SELECT COUNT(*) FROM sqlite_master", null);
             try {
                 ok = c.moveToNext();
