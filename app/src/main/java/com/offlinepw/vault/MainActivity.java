@@ -2588,7 +2588,9 @@ public class MainActivity extends AppCompatActivity {
         for (VaultItem it : items) {
             String pw = it.getPassword();
             if (pw == null || pw.isEmpty()) continue;
-            byPassword.computeIfAbsent(pw, k -> new ArrayList<>()).add(healthTitleOf(it));
+            String normKey = PasswordNormalizer.normalize(pw);
+            if (normKey == null) normKey = pw;
+            byPassword.computeIfAbsent(normKey, k -> new ArrayList<>()).add(healthTitleOf(it));
             if (isWeakPassword(pw)) weakTitles.add(healthTitleOf(it));
             long ref = it.getUpdatedAt() > 0 ? it.getUpdatedAt() : it.getCreatedAt();
             if (ref > 0 && now - ref > STALE_AFTER_MS) {
@@ -2663,36 +2665,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     static boolean isWeakPassword(String pw) {
-        if (pw.length() < 10) return true;
-        if (shannonEntropyBits(pw) < 45) return true;
-        String lower = pw.toLowerCase(Locale.ROOT);
-        // توالی‌های ساده و فوق‌العاده رایج
-        if (lower.contains("123456") || lower.contains("abcdef") || lower.contains("qwerty")
-                || lower.contains("password") || lower.contains("admin")) {
-            return true;
-        }
-        // تکرار یک کاراکتر بیش از ۳ بار متوالی
-        if (pw.matches(".*(.)\\1{3,}.*")) return true;
-        boolean allDigits = true, allLower = true;
-        for (char c : pw.toCharArray()) {
-            if (!Character.isDigit(c)) allDigits = false;
-            if (!(c >= 'a' && c <= 'z')) allLower = false;
-            if (!allDigits && !allLower) break;
-        }
-        return (allDigits || allLower) && pw.length() < 16;
+        return PasswordStrength.isWeak(pw);
     }
 
-    static double shannonEntropyBits(String s) {
-        java.util.HashMap<Character, Integer> freq = new java.util.HashMap<>();
-        for (char c : s.toCharArray()) freq.merge(c, 1, Integer::sum);
-        int n = s.length();
-        double h = 0;
-        for (int cnt : freq.values()) {
-            double p = (double) cnt / n;
-            h -= p * (Math.log(p) / Math.log(2));
-        }
-        return h * n;
-    }
+
 
     /** تاریخ کوتاه برای خط «به‌روزرسانی» کارت (جلالی برای فارسی، از طریق ICU). */
     private String formatVaultDate(long millis) {
